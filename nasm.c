@@ -1,0 +1,196 @@
+#include "nasm.h"
+
+#define STATIC_ARRAY_LENGTH(array) (sizeof(array) / sizeof((array)[0]))
+
+static const char *input_int_regs[] = {
+    "rdi",
+    "rsi",
+    "rdx",
+    "rcx",
+    "r8",
+    "r9",
+};
+
+static const char *output_int_regs[] = {
+    "rax",
+    "rdx",
+};
+
+typedef enum {
+    REG_KIND_IMM_INT,
+    REG_KIND_STACK,
+} RegKind;
+
+typedef struct RegStack {
+    unsigned long long offset;
+} RegStack;
+
+typedef struct Reg {
+    RegKind kind;
+    union {
+        unsigned long long imm_int;
+        RegStack stack;
+    } u;
+} Reg;
+
+DYNARR_EASY_GEN(Reg);
+
+void emitReg(const RegDynarr *regs, IrRegIndex index) {
+    assert(index <= regs->h.length);
+    Reg reg = regs->d[index];
+    switch (reg.kind) {
+        case REG_KIND_IMM_INT:
+            printf("%llu", reg.u.imm_int);
+            break;
+        case REG_KIND_STACK:
+            printf("[rbp-%llu]", reg.u.stack.offset);
+            break;
+    }
+}
+
+void generateNasm(const Ir *ir) {
+    RegDynarr *regs;
+    DYNARR_EASY_CREATE(&regs);
+
+    for (size_t i = 0; i < ir->fn_imports->h.length; i++) {
+        IrFnImport import = ir->fn_imports->d[i];
+        printf("extern %.*s\n", (int)import.name.length, import.name.data);
+    }
+
+    for (size_t i = 0; i < ir->fn_exports->h.length; i++) {
+        IrFnExport export = ir->fn_exports->d[i];
+        printf("global %.*s\n", (int)export.name.length, export.name.data);
+    }
+
+    printf("section .text\n");
+
+    for (size_t i = 0; i < ir->fn_impls->h.length; i++) {
+        regs->h.length = 0;
+
+        IrFnImpl impl = ir->fn_impls->d[i];
+        printf("impl_%zu:\n", i);
+        for (size_t export_i = 0; export_i < ir->fn_exports->h.length; export_i++) {
+            IrFnExport export = ir->fn_exports->d[export_i];
+            if (export.impl == i) {
+                printf("%.*s:\n", (int)export.name.length, export.name.data);
+            }
+        }
+
+        printf("    push rbp\n");
+        printf("    mov rbp,rsp\n");
+
+        const IrTypeDynarr *input_types = ir->fn_types->d[impl.type].input_types;
+
+        size_t used_ints = 0;
+        unsigned long long stack_top = 0;
+        for (size_t i = 0; i < input_types->h.length; i++) {
+            switch (input_types->d[i]) {
+                case IR_TYPE_INT:
+                    if (used_ints >= STATIC_ARRAY_LENGTH(input_int_regs)) {
+                        FATAL_ERROR("support for function impls with more than %zu integer inputs isn't implemented\n", STATIC_ARRAY_LENGTH(input_int_regs));
+                    }
+                    stack_top += 8;
+                    printf("    push %s\n", input_int_regs[used_ints]);
+                    used_ints++;
+                    DYNARR_UNSAFE_PUSH(&regs, ((Reg){REG_KIND_STACK, {.stack = {stack_top}}}));
+                    break;
+                case IR_TYPE_FLOAT:
+                    FATAL_ERROR("support for function impls with floating point inputs isn't implemented\n");
+                    break;
+            }
+        }
+
+        for (size_t i = 0; i < impl.ops->h.length; i++) {
+            IrOp op = impl.ops->d[i];
+            switch (op.kind) {
+                case IR_OP_KIND_INT:
+                    DYNARR_UNSAFE_PUSH(&regs, ((Reg){REG_KIND_IMM_INT, {.imm_int = op.u._int}}));
+                    break;
+                case IR_OP_KIND_CALL_FN_IMPL:
+                case IR_OP_KIND_CALL_FN_IMPORT: {
+                    IrOpCall call = op.u.call;
+                    IrFnTypeIndex callee_type_index = 0;
+                    switch (op.kind) {
+                        case IR_OP_KIND_CALL_FN_IMPL:
+                            callee_type_index = ir->fn_impls->d[op.u.call.fn].type;
+                            break;
+                        case IR_OP_KIND_CALL_FN_IMPORT: {
+                            callee_type_index = ir->fn_imports->d[op.u.call.fn].type;
+                            break;
+                        }
+                        default:
+                            assert(0 && "unreachable");
+                            break;
+                    }
+                    IrFnType callee_type = ir->fn_types->d[callee_type_index];
+
+                    size_t used_ints = 0;
+                    for (size_t i = 0; i < callee_type.input_types->h.length; i++) {
+                        IrType input_type = callee_type.input_types->d[i];
+                        switch (input_type) {
+                            case IR_TYPE_INT:
+                                if (used_ints >= STATIC_ARRAY_LENGTH(input_int_regs)) {
+                                    FATAL_ERROR("support for function calls with more than %zu integer inputs isn't implemented\n", STATIC_ARRAY_LENGTH(input_int_regs));
+                                }
+                                printf("    mov %s,", input_int_regs[used_ints]);
+                                emitReg(regs, call.inputs->d[i]);
+                                printf("\n");
+                                used_ints++;
+                                break;
+                            case IR_TYPE_FLOAT:
+                                FATAL_ERROR("support for function calls with floating point inputs isn't implemented\n");
+                                break;
+                        }
+                    }
+
+                    // TODO: align the stack before the call
+                    switch (op.kind) {
+                        case IR_OP_KIND_CALL_FN_IMPL:
+                            printf("    call impl_%zu\n", call.fn);
+                            break;
+                        case IR_OP_KIND_CALL_FN_IMPORT: {
+                            LisStringView name = ir->fn_imports->d[call.fn].name;
+                            printf("    call %.*s wrt ..plt\n", (int)name.length, name.data);
+                            break;
+                        }
+                        default:
+                            assert(0 && "unreachable");
+                            break;
+                    }
+
+                    used_ints = 0;
+                    for (size_t i = 0; i < callee_type.output_types->h.length; i++) {
+                        IrType output_type = callee_type.output_types->d[i];
+                        switch (output_type) {
+                            case IR_TYPE_INT:
+                                if (used_ints >= STATIC_ARRAY_LENGTH(output_int_regs)) {
+                                    FATAL_ERROR("support for function calls with more than %zu integer outputs isn't implemented\n", STATIC_ARRAY_LENGTH(output_int_regs));
+                                }
+                                stack_top += 8;
+                                printf("    push %s\n", output_int_regs[used_ints]);
+                                used_ints++;
+                                DYNARR_UNSAFE_PUSH(&regs, ((Reg){REG_KIND_STACK, {.stack = {stack_top}}}));
+                                break;
+                            case IR_TYPE_FLOAT:
+                                FATAL_ERROR("support for function calls with floating point outputs isn't implemented\n");
+                                break;
+                        }
+                    }
+                    break;
+                }
+                case IR_OP_KIND_RETURN:
+                    printf("    mov rax,");
+                    emitReg(regs, op.u._return);
+                    printf("\n");
+
+                    printf("    mov rsp,rbp\n");
+                    printf("    pop rbp\n");
+                    printf("    ret\n");
+                    break;
+            }
+        }
+    }
+
+    printf("section .note.GNU-stack\n");
+    rawrDynarrDestroy(RAWR_DYNARR_GENERAL_POINTER(&regs));
+}
