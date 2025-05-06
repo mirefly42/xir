@@ -88,18 +88,6 @@ int main(int argc, char *argv[]) {
         LisAtom name_atom = nextAtomOrFail(&view);
         LisStringView name = lisStringViewSliceWithRange(source, name_atom.range);
 
-        /*
-            (fn-type (int int) (int))
-            (fn-impl 0
-                (int 42)
-                (return 0)
-            )
-            (fn-export 0 main)
-
-            (fn-type (int) (int))
-            (fn-import 1 putchar)
-        */
-
         if (lisStringViewEqual(name, SV("fn-type"))) {
             LisNodesView input_types_view = lisNodesViewFromList(nextListOrFail(&view));
             IrTypeDynarr *input_types = parseTypesList(source, input_types_view);
