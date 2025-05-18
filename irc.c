@@ -152,7 +152,7 @@ int main(int argc, char *argv[]) {
             IrFnTypeIndex fn_type_index = nextUllOrFail(source, &view);
             LisAtom fn_name_atom = nextAtomOrFail(&view);
             if (!lisNodesViewIsEmpty(&view)) {
-                FATAL_ERROR("fn-export directive expects 2 arguments\n");
+                FATAL_ERROR("fn-import directive expects 2 arguments\n");
             }
 
             DYNARR_UNSAFE_PUSH(&ir.fn_imports, ((IrFnImport){fn_type_index, lisStringViewSliceWithRange(source, fn_name_atom.range)}));
