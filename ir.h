@@ -23,6 +23,7 @@ typedef enum {
     IR_OP_KIND_CALL_FN_IMPL,
     IR_OP_KIND_CALL_FN_IMPORT,
     IR_OP_KIND_RETURN,
+    IR_OP_KIND_DATA_PTR,
 } IrOpKind;
 
 typedef size_t IrRegIndex;
@@ -37,12 +38,16 @@ typedef struct IrOpCall {
 
 typedef IrRegIndex IrOpReturn;
 
+typedef size_t IrDataIndex;
+typedef IrDataIndex IrOpDataPtr;
+
 typedef struct IrOp {
     IrOpKind kind;
     union {
         IrOpInt _int;
         IrOpCall call;
         IrOpReturn _return;
+        IrOpDataPtr data_ptr;
     } u;
 } IrOp;
 
@@ -70,11 +75,26 @@ typedef struct IrFnExport {
 
 DYNARR_EASY_GEN(IrFnExport);
 
+typedef enum {
+    IR_DATA_FLAGS_READ_ONLY = 0x1,
+} IrDataFlags;
+
+typedef RAWR_DYNARR_GEN(unsigned char, UnsignedCharDynarr) UnsignedCharDynarr;
+
+typedef struct IrData {
+    IrDataFlags flags;
+    unsigned int alignment;
+    UnsignedCharDynarr *bytes;
+} IrData;
+
+DYNARR_EASY_GEN(IrData);
+
 typedef struct Ir {
     IrFnTypeDynarr *fn_types;
     IrFnImplDynarr *fn_impls;
     IrFnImportDynarr *fn_imports;
     IrFnExportDynarr *fn_exports;
+    IrDataDynarr *datas;
 } Ir;
 
 #endif

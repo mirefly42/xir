@@ -80,6 +80,7 @@ int main(int argc, char *argv[]) {
     DYNARR_EASY_CREATE(&ir.fn_impls);
     DYNARR_EASY_CREATE(&ir.fn_imports);
     DYNARR_EASY_CREATE(&ir.fn_exports);
+    DYNARR_EASY_CREATE(&ir.datas);
 
     while (!lisNodesViewIsEmpty(&view)) {
         LisList *list = nextListOrFail(&view);
@@ -138,6 +139,11 @@ int main(int argc, char *argv[]) {
                         IR_OP_KIND_RETURN,
                         {._return = nextUllOrFail(source, &view)},
                     };
+                } else if (lisStringViewEqual(op_name, SV("data-ptr"))) {
+                    op = (IrOp){
+                        IR_OP_KIND_DATA_PTR,
+                        {.data_ptr = nextUllOrFail(source, &view)},
+                    };
                 }
 
                 if (!lisNodesViewIsEmpty(&view)) {
@@ -164,6 +170,34 @@ int main(int argc, char *argv[]) {
             }
 
             DYNARR_UNSAFE_PUSH(&ir.fn_exports, ((IrFnExport){fn_impl_index, lisStringViewSliceWithRange(source, fn_name_atom.range)}));
+        } else if (lisStringViewEqual(name, SV("data"))) {
+            LisList *flags_list = nextListOrFail(&view);
+            LisNodesView flags_view = lisNodesViewFromList(flags_list);
+
+            IrData data = {0};
+            while (!lisNodesViewIsEmpty(&flags_view)) {
+                LisAtom flag_atom = nextAtomOrFail(&flags_view);
+                LisStringView flag_name = lisStringViewSliceWithRange(source, flag_atom.range);
+                if (lisStringViewEqual(flag_name, SV("read-only"))) {
+                    data.flags |= IR_DATA_FLAGS_READ_ONLY;
+                } else {
+                    FATAL_ERROR("invalid data flag %.*s\n", (int)flag_name.length, flag_name.data);
+                }
+            }
+
+            data.alignment = nextUllOrFail(source, &view);
+
+            DYNARR_EASY_CREATE(&data.bytes);
+
+            while (!lisNodesViewIsEmpty(&view)) {
+                unsigned long long byte = nextUllOrFail(source, &view);
+                if (byte > 0xFF) {
+                    FATAL_ERROR("invalid byte\n");
+                }
+                DYNARR_UNSAFE_PUSH(&data.bytes, byte);
+            }
+
+            DYNARR_UNSAFE_PUSH(&ir.datas, data);
         } else {
             FATAL_ERROR("invalid directive %.*s\n", (int)name.length, name.data);
         }

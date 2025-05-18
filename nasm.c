@@ -49,6 +49,8 @@ void emitReg(const RegDynarr *regs, IrRegIndex index) {
 }
 
 void generateNasm(const Ir *ir) {
+    printf("default rel\n");
+
     RegDynarr *regs;
     DYNARR_EASY_CREATE(&regs);
 
@@ -187,8 +189,40 @@ void generateNasm(const Ir *ir) {
                     printf("    pop rbp\n");
                     printf("    ret\n");
                     break;
+                case IR_OP_KIND_DATA_PTR:
+                    printf("    lea rax,[data_%zu]\n", op.u.data_ptr);
+                    stack_top += 8;
+                    printf("    push rax\n");
+                    DYNARR_UNSAFE_PUSH(&regs, ((Reg){REG_KIND_STACK, {.stack = {stack_top}}}));
+                    break;
             }
         }
+    }
+
+    for (size_t i = 0; i < ir->datas->h.length; i++) {
+        const IrData *data = ir->datas->d + i;
+        printf("section ");
+        if (data->flags & IR_DATA_FLAGS_READ_ONLY) {
+            printf(".rodata");
+        } else {
+            printf(".data");
+        }
+        printf("\n");
+
+        // TODO: verify that the alignment is a power of two
+        printf("    align %u,db 0\n", data->alignment);
+        printf("    data_%zu:", i);
+        if (data->bytes->h.length > 0) {
+            printf(" db");
+        }
+
+        for (size_t i = 0; i < data->bytes->h.length; i++) {
+            if (i > 0) {
+                printf(",");
+            }
+            printf(" 0x%X", data->bytes->d[i]);
+        }
+        printf("\n");
     }
 
     printf("section .note.GNU-stack\n");
