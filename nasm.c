@@ -2,6 +2,8 @@
 
 #define STATIC_ARRAY_LENGTH(array) (sizeof(array) / sizeof((array)[0]))
 
+#define STACK_ALIGNMENT 16
+
 static const char *input_int_regs[] = {
     "rdi",
     "rsi",
@@ -145,7 +147,11 @@ void generateNasm(const Ir *ir) {
                         }
                     }
 
-                    // TODO: align the stack before the call
+                    unsigned long long stack_padding = (STACK_ALIGNMENT - (stack_top % STACK_ALIGNMENT)) % STACK_ALIGNMENT;
+                    if (stack_padding > 0) {
+                        printf("    sub rsp,%llu\n", stack_padding);
+                    }
+
                     switch (op.kind) {
                         case IR_OP_KIND_CALL_FN_IMPL:
                             printf("    call impl_%zu\n", call.fn);
@@ -158,6 +164,10 @@ void generateNasm(const Ir *ir) {
                         default:
                             assert(0 && "unreachable");
                             break;
+                    }
+
+                    if (stack_padding > 0) {
+                        printf("    add rsp,%llu\n", stack_padding);
                     }
 
                     used_ints = 0;
