@@ -144,6 +144,8 @@ int main(int argc, char *argv[]) {
                         IR_OP_KIND_DATA_PTR,
                         {.data_ptr = nextUllOrFail(source, &view)},
                     };
+                } else {
+                    FATAL_ERROR("invalid operation %.*s\n", (int)op_name.length, op_name.data);
                 }
 
                 if (!lisNodesViewIsEmpty(&view)) {
