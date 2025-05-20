@@ -37,6 +37,24 @@ typedef struct Reg {
 
 DYNARR_EASY_GEN(Reg);
 
+static IrFnTypeIndex irOpCallFnTypeIndex(const Ir *ir, const IrOp *op) {
+    switch (op->kind) {
+        case IR_OP_KIND_CALL_FN_IMPL:
+            return ir->fn_impls->d[op->u.call.fn].type;
+        case IR_OP_KIND_CALL_FN_IMPORT:
+            return ir->fn_imports->d[op->u.call.fn].type;
+        default:
+            assert(0 && "unreachable");
+    }
+}
+
+static unsigned long long irTypeSize(IrType type) {
+    switch (type) {
+        case IR_TYPE_INT: return 8;
+        case IR_TYPE_FLOAT: return 16;
+    }
+}
+
 void emitReg(const RegDynarr *regs, IrRegIndex index) {
     assert(index <= regs->h.length);
     Reg reg = regs->d[index];
@@ -88,12 +106,13 @@ void generateNasm(const Ir *ir) {
         size_t used_ints = 0;
         unsigned long long stack_top = 0;
         for (size_t i = 0; i < input_types->h.length; i++) {
-            switch (input_types->d[i]) {
+            IrType type = input_types->d[i];
+            switch (type) {
                 case IR_TYPE_INT:
                     if (used_ints >= STATIC_ARRAY_LENGTH(input_int_regs)) {
                         FATAL_ERROR("support for function impls with more than %zu integer inputs isn't implemented\n", STATIC_ARRAY_LENGTH(input_int_regs));
                     }
-                    stack_top += 8;
+                    stack_top += irTypeSize(type);
                     printf("    push %s\n", input_int_regs[used_ints]);
                     used_ints++;
                     DYNARR_UNSAFE_PUSH(&regs, ((Reg){REG_KIND_STACK, {.stack = {stack_top}}}));
@@ -104,6 +123,8 @@ void generateNasm(const Ir *ir) {
             }
         }
 
+        unsigned long long stack_pre_alloc_base = stack_top;
+
         for (size_t i = 0; i < impl.ops->h.length; i++) {
             IrOp op = impl.ops->d[i];
             switch (op.kind) {
@@ -112,20 +133,40 @@ void generateNasm(const Ir *ir) {
                     break;
                 case IR_OP_KIND_CALL_FN_IMPL:
                 case IR_OP_KIND_CALL_FN_IMPORT: {
-                    IrOpCall call = op.u.call;
-                    IrFnTypeIndex callee_type_index = 0;
-                    switch (op.kind) {
-                        case IR_OP_KIND_CALL_FN_IMPL:
-                            callee_type_index = ir->fn_impls->d[op.u.call.fn].type;
-                            break;
-                        case IR_OP_KIND_CALL_FN_IMPORT: {
-                            callee_type_index = ir->fn_imports->d[op.u.call.fn].type;
-                            break;
-                        }
-                        default:
-                            assert(0 && "unreachable");
-                            break;
+                    IrFnTypeIndex fn_type_index = irOpCallFnTypeIndex(ir, &op);
+                    const IrTypeDynarr *output_types = ir->fn_types->d[fn_type_index].output_types;
+                    for (size_t i = 0; i < output_types->h.length; i++) {
+                        unsigned long long output_type_size = irTypeSize(output_types->d[i]);
+                        stack_top += output_type_size;
+                        DYNARR_UNSAFE_PUSH(&regs, ((Reg){REG_KIND_STACK, {.stack = {stack_top}}}));
                     }
+                    break;
+                }
+                case IR_OP_KIND_DATA_PTR:
+                    stack_top += irTypeSize(IR_TYPE_INT);
+                    DYNARR_UNSAFE_PUSH(&regs, ((Reg){REG_KIND_STACK, {.stack = {stack_top}}}));
+                    break;
+                case IR_OP_KIND_RETURN:
+                    break;
+            }
+        }
+
+        unsigned long long stack_padding = (STACK_ALIGNMENT - (stack_top % STACK_ALIGNMENT)) % STACK_ALIGNMENT;
+        stack_top += stack_padding;
+
+        printf("    sub rsp,%llu\n", stack_top - stack_pre_alloc_base);
+        size_t used_ir_regs = input_types->h.length;
+
+        for (size_t i = 0; i < impl.ops->h.length; i++) {
+            IrOp op = impl.ops->d[i];
+            switch (op.kind) {
+                case IR_OP_KIND_INT:
+                    used_ir_regs++;
+                    break;
+                case IR_OP_KIND_CALL_FN_IMPL:
+                case IR_OP_KIND_CALL_FN_IMPORT: {
+                    IrOpCall call = op.u.call;
+                    IrFnTypeIndex callee_type_index = irOpCallFnTypeIndex(ir, &op);
                     IrFnType callee_type = ir->fn_types->d[callee_type_index];
 
                     size_t used_ints = 0;
@@ -147,10 +188,6 @@ void generateNasm(const Ir *ir) {
                         }
                     }
 
-                    unsigned long long stack_padding = (STACK_ALIGNMENT - (stack_top % STACK_ALIGNMENT)) % STACK_ALIGNMENT;
-                    if (stack_padding > 0) {
-                        printf("    sub rsp,%llu\n", stack_padding);
-                    }
 
                     switch (op.kind) {
                         case IR_OP_KIND_CALL_FN_IMPL:
@@ -166,10 +203,6 @@ void generateNasm(const Ir *ir) {
                             break;
                     }
 
-                    if (stack_padding > 0) {
-                        printf("    add rsp,%llu\n", stack_padding);
-                    }
-
                     used_ints = 0;
                     for (size_t i = 0; i < callee_type.output_types->h.length; i++) {
                         IrType output_type = callee_type.output_types->d[i];
@@ -178,10 +211,10 @@ void generateNasm(const Ir *ir) {
                                 if (used_ints >= STATIC_ARRAY_LENGTH(output_int_regs)) {
                                     FATAL_ERROR("support for function calls with more than %zu integer outputs isn't implemented\n", STATIC_ARRAY_LENGTH(output_int_regs));
                                 }
-                                stack_top += 8;
-                                printf("    push %s\n", output_int_regs[used_ints]);
+                                printf("    mov ");
+                                emitReg(regs, used_ir_regs++);
+                                printf(",%s\n", output_int_regs[used_ints]);
                                 used_ints++;
-                                DYNARR_UNSAFE_PUSH(&regs, ((Reg){REG_KIND_STACK, {.stack = {stack_top}}}));
                                 break;
                             case IR_TYPE_FLOAT:
                                 FATAL_ERROR("support for function calls with floating point outputs isn't implemented\n");
@@ -201,9 +234,9 @@ void generateNasm(const Ir *ir) {
                     break;
                 case IR_OP_KIND_DATA_PTR:
                     printf("    lea rax,[data_%zu]\n", op.u.data_ptr);
-                    stack_top += 8;
-                    printf("    push rax\n");
-                    DYNARR_UNSAFE_PUSH(&regs, ((Reg){REG_KIND_STACK, {.stack = {stack_top}}}));
+                    printf("    mov ");
+                    emitReg(regs, used_ir_regs++);
+                    printf(",rax\n");
                     break;
             }
         }
