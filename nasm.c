@@ -148,6 +148,7 @@ void generateNasm(const Ir *ir) {
                     break;
                 case IR_OP_KIND_RETURN:
                 case IR_OP_KIND_GOTO:
+                case IR_OP_KIND_BRANCH:
                     break;
             }
         }
@@ -243,6 +244,22 @@ void generateNasm(const Ir *ir) {
                 case IR_OP_KIND_GOTO:
                     printf("    jmp .op_%zu\n", op.u._goto);
                     break;
+                case IR_OP_KIND_BRANCH: {
+                    IrOpBranch branch = op.u.branch;
+                    const Reg *cond_reg = regs->d + branch.cond;
+                    if (cond_reg->kind == REG_KIND_IMM_INT) {
+                        if (cond_reg->u.imm_int) {
+                            printf("    jmp .op_%zu\n", branch.op);
+                        }
+                        break;
+                    }
+
+                    printf("    cmp qword ");
+                    emitReg(regs, branch.cond);
+                    printf(",0\n");
+                    printf("    jnz .op_%zu\n", branch.op);
+                    break;
+                }
             }
         }
         printf("    .op_%zu:\n", impl.ops->h.length);

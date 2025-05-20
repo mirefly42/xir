@@ -25,6 +25,7 @@ typedef enum {
     IR_OP_KIND_RETURN,
     IR_OP_KIND_DATA_PTR,
     IR_OP_KIND_GOTO,
+    IR_OP_KIND_BRANCH,
 } IrOpKind;
 
 typedef size_t IrRegIndex;
@@ -43,6 +44,11 @@ typedef size_t IrDataIndex;
 typedef IrDataIndex IrOpDataPtr;
 typedef size_t IrOpIndex;
 
+typedef struct IrOpBranch {
+    IrRegIndex cond;
+    IrOpIndex op;
+} IrOpBranch;
+
 typedef struct IrOp {
     IrOpKind kind;
     union {
@@ -51,6 +57,7 @@ typedef struct IrOp {
         IrOpReturn _return;
         IrOpDataPtr data_ptr;
         IrOpIndex _goto;
+        IrOpBranch branch;
     } u;
 } IrOp;
 

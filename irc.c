@@ -149,6 +149,10 @@ int main(int argc, char *argv[]) {
                         IR_OP_KIND_GOTO,
                         {._goto = nextUllOrFail(source, &view)},
                     };
+                } else if (lisStringViewEqual(op_name, SV("branch"))) {
+                    op.kind = IR_OP_KIND_BRANCH;
+                    op.u.branch.cond = nextUllOrFail(source, &view);
+                    op.u.branch.op = nextUllOrFail(source, &view);
                 } else {
                     FATAL_ERROR("invalid operation %.*s\n", (int)op_name.length, op_name.data);
                 }
