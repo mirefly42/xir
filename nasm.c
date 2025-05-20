@@ -147,6 +147,7 @@ void generateNasm(const Ir *ir) {
                     DYNARR_UNSAFE_PUSH(&regs, ((Reg){REG_KIND_STACK, {.stack = {stack_top}}}));
                     break;
                 case IR_OP_KIND_RETURN:
+                case IR_OP_KIND_GOTO:
                     break;
             }
         }
@@ -159,6 +160,7 @@ void generateNasm(const Ir *ir) {
 
         for (size_t i = 0; i < impl.ops->h.length; i++) {
             IrOp op = impl.ops->d[i];
+            printf("    .op_%zu:\n", i);
             switch (op.kind) {
                 case IR_OP_KIND_INT:
                     used_ir_regs++;
@@ -238,8 +240,12 @@ void generateNasm(const Ir *ir) {
                     emitReg(regs, used_ir_regs++);
                     printf(",rax\n");
                     break;
+                case IR_OP_KIND_GOTO:
+                    printf("    jmp .op_%zu\n", op.u._goto);
+                    break;
             }
         }
+        printf("    .op_%zu:\n", impl.ops->h.length);
     }
 
     for (size_t i = 0; i < ir->datas->h.length; i++) {

@@ -24,6 +24,7 @@ typedef enum {
     IR_OP_KIND_CALL_FN_IMPORT,
     IR_OP_KIND_RETURN,
     IR_OP_KIND_DATA_PTR,
+    IR_OP_KIND_GOTO,
 } IrOpKind;
 
 typedef size_t IrRegIndex;
@@ -40,6 +41,7 @@ typedef IrRegIndex IrOpReturn;
 
 typedef size_t IrDataIndex;
 typedef IrDataIndex IrOpDataPtr;
+typedef size_t IrOpIndex;
 
 typedef struct IrOp {
     IrOpKind kind;
@@ -48,6 +50,7 @@ typedef struct IrOp {
         IrOpCall call;
         IrOpReturn _return;
         IrOpDataPtr data_ptr;
+        IrOpIndex _goto;
     } u;
 } IrOp;
 
