@@ -107,4 +107,6 @@ typedef struct Ir {
     IrDataDynarr *datas;
 } Ir;
 
+IrFnTypeIndex irOpCallFnTypeIndex(const Ir *ir, const IrOp *op);
+
 #endif

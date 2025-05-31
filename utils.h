@@ -16,17 +16,22 @@
 
 #define DYNARR_EASY_GEN(type) typedef RAWR_DYNARR_GEN(type, type##Dynarr) type##Dynarr
 
-#define DYNARR_EASY_CREATE(dynarr_pp) do { \
-        if (rawrDynarrCreateDefault(RAWR_DYNARR_GENERAL_POINTER(dynarr_pp))) { \
+#define DYNARR_RESULT_CHECK(result) do { \
+        if (result) { \
             FATAL_ERROR("allocation failed\n"); \
         } \
     } while (0)
 
+#define DYNARR_GP RAWR_DYNARR_GENERAL_POINTER
+
+#define DYNARR_EASY_CREATE(dynarr_pp) \
+    DYNARR_RESULT_CHECK(rawrDynarrCreateDefault(DYNARR_GP(dynarr_pp)))
+
 #define DYNARR_UNSAFE_PUSH(dynarr_pp, value) do { \
-        if (rawrDynarrExtend(RAWR_DYNARR_GENERAL_POINTER(dynarr_pp), 1)) { \
-            FATAL_ERROR("allocation failed\n"); \
-        } \
+        DYNARR_RESULT_CHECK(rawrDynarrExtend(DYNARR_GP(dynarr_pp), 1)); \
         (**(dynarr_pp)).d[RAWR_DYNARR_LAST_INDEX(*(dynarr_pp))] = (value); \
     } while (0)
+
+void *checkedMalloc(size_t size);
 
 #endif
