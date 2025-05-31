@@ -136,7 +136,6 @@ void generateNasm(const Ir *ir) {
                     DYNARR_UNSAFE_PUSH(&regs, ((Reg){REG_KIND_STACK, {.stack = {stack_top}}}));
                     break;
                 case IR_OP_KIND_RETURN:
-                case IR_OP_KIND_GOTO:
                 case IR_OP_KIND_BRANCH:
                     break;
             }
@@ -229,9 +228,6 @@ void generateNasm(const Ir *ir) {
                     printf("    mov ");
                     emitReg(regs, used_ir_regs++);
                     printf(",rax\n");
-                    break;
-                case IR_OP_KIND_GOTO:
-                    printf("    jmp .op_%zu\n", op.u._goto);
                     break;
                 case IR_OP_KIND_BRANCH: {
                     IrOpBranch branch = op.u.branch;

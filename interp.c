@@ -64,7 +64,6 @@ void interpEvalImpl(Interp *interp, IrFnImplIndex impl_index, size_t regs_base) 
                 break;
             }
             case IR_OP_KIND_RETURN:
-            case IR_OP_KIND_GOTO:
             case IR_OP_KIND_BRANCH:
                 break;
         }
@@ -104,10 +103,6 @@ void interpEvalImpl(Interp *interp, IrFnImplIndex impl_index, size_t regs_base) 
                 return;
             case IR_OP_KIND_DATA_PTR:
                 DYNARR_UNSAFE_PUSH(&interp->regs, interp->data_ptrs->d[op.u.data_ptr]);
-                break;
-            case IR_OP_KIND_GOTO:
-                interp->regs->h.length = ops_used_regs->d[op.u._goto];
-                i = op.u._goto - 1; // HACK: subtract one to cancel out i++
                 break;
             case IR_OP_KIND_BRANCH: {
                 IrOpBranch branch = op.u.branch;
