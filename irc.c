@@ -1,5 +1,6 @@
 #include "ir.h"
 #include "nasm.h"
+#include "validation.h"
 #include <lis/parser.h>
 #include <lis/rawr_dynarr.h>
 #include <stdio.h>
@@ -209,5 +210,6 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    validateIr(&ir);
     generateNasm(&ir);
 }

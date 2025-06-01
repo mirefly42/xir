@@ -1,7 +1,7 @@
 .POSIX:
 
-SRC = interp.c ir.c irc.c nasm.c utils.c
-HDR = interp.h ir.h nasm.h utils.h
+SRC = interp.c ir.c irc.c nasm.c utils.c validation.c
+HDR = interp.h ir.h nasm.h utils.h validation.h
 OBJ = ${SRC:.c=.o}
 LIBS = -llis
 

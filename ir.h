@@ -6,6 +6,7 @@
 typedef enum {
     IR_TYPE_INT,
     IR_TYPE_FLOAT,
+    IR_TYPES_COUNT,
 } IrType;
 
 DYNARR_EASY_GEN(IrType);

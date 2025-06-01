@@ -260,7 +260,6 @@ void generateNasm(const Ir *ir) {
         }
         printf("\n");
 
-        // TODO: verify that the alignment is a power of two
         printf("    align %u,db 0\n", data->alignment);
         printf("    data_%zu:", i);
         if (data->bytes->h.length > 0) {
