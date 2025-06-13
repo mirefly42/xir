@@ -1,8 +1,8 @@
-#ifndef VALIDATION_H
-#define VALIDATION_H
+#ifndef XIR_VALIDATION_H
+#define XIR_VALIDATION_H
 
 #include "ir.h"
 
-void validateIr(const Ir *ir);
+void xirValidateIr(const XirIr *ir);
 
 #endif

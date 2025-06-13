@@ -1,8 +1,8 @@
-#ifndef NASM_H
-#define NASM_H
+#ifndef XIR_NASM_H
+#define XIR_NASM_H
 
 #include "ir.h"
 
-void generateNasm(const Ir *ir);
+void xirGenerateNasm(const XirIr *ir);
 
 #endif

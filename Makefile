@@ -3,19 +3,19 @@
 PREFIX = /usr/local
 BINDIR = ${DESTDIR}${PREFIX}/bin
 LIBDIR = ${DESTDIR}${PREFIX}/lib
-HDRDIR = ${DESTDIR}${PREFIX}/include/xxxir
+HDRDIR = ${DESTDIR}${PREFIX}/include/xir
 
 SRC = interp.c ir.c nasm.c utils.c validation.c
 HDR = interp.h ir.h nasm.h utils.h validation.h
 OBJ = ${SRC:.c=.o}
 LIBS = -llis
 
-all: xxxirc libxxxir.a
+all: xirc libxir.a
 
-xxxirc: ${OBJ} irc.o
+xirc: ${OBJ} irc.o
 	${CC} -o $@ irc.o ${OBJ} ${LIBS} ${LDFLAGS}
 
-libxxxir.a: ${OBJ}
+libxir.a: ${OBJ}
 	${AR} -rc $@ $?
 
 .c.o:
@@ -25,22 +25,22 @@ ${OBJ}: ${HDR}
 
 install: all
 	mkdir -p -- "${BINDIR}"
-	cp -f -- xxxirc "${BINDIR}"
-	cd -- "${BINDIR}" && chmod 755 xxxirc
+	cp -f -- xirc "${BINDIR}"
+	cd -- "${BINDIR}" && chmod 755 xirc
 	mkdir -p -- "${LIBDIR}"
-	cp -f -- libxxxir.a "${LIBDIR}"
-	cd -- "${LIBDIR}" && chmod 644 libxxxir.a
+	cp -f -- libxir.a "${LIBDIR}"
+	cd -- "${LIBDIR}" && chmod 644 libxir.a
 	mkdir -p -- "${HDRDIR}"
 	cp -f -- ${HDR} "${HDRDIR}"
 	cd -- "${HDRDIR}" && chmod 644 ${HDR}
 
 uninstall:
-	cd -- "${BINDIR}" && rm -f xxxirc
-	cd -- "${LIBDIR}" && rm -f libxxxir.a
+	cd -- "${BINDIR}" && rm -f xirc
+	cd -- "${LIBDIR}" && rm -f libxir.a
 	cd -- "${HDRDIR}" && rm -f ${HDR}
 	rmdir -- "${HDRDIR}"
 
 clean:
-	rm -f xxxirc libxxxir.a irc.o ${OBJ}
+	rm -f xirc libxir.a irc.o ${OBJ}
 
 .PHONY: all install uninstall clean

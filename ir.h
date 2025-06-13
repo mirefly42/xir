@@ -1,111 +1,111 @@
-#ifndef IR_H
-#define IR_H
+#ifndef XIR_IR_H
+#define XIR_IR_H
 
 #include "utils.h"
 
 typedef enum {
-    IR_TYPE_INT,
-    IR_TYPE_FLOAT,
-    IR_TYPES_COUNT,
-} IrType;
+    XIR_IR_TYPE_INT,
+    XIR_IR_TYPE_FLOAT,
+    XIR_IR_TYPES_COUNT,
+} XirIrType;
 
-DYNARR_EASY_GEN(IrType);
+XIR_DYNARR_EASY_GEN(XirIrType);
 
-typedef struct IrFnType {
-    IrTypeDynarr *input_types;
-    IrTypeDynarr *output_types;
-} IrFnType;
+typedef struct XirIrFnType {
+    XirIrTypeDynarr *input_types;
+    XirIrTypeDynarr *output_types;
+} XirIrFnType;
 
-typedef size_t IrFnTypeIndex;
-DYNARR_EASY_GEN(IrFnType);
+typedef size_t XirIrFnTypeIndex;
+XIR_DYNARR_EASY_GEN(XirIrFnType);
 
 typedef enum {
-    IR_OP_KIND_INT,
-    IR_OP_KIND_CALL_FN_IMPL,
-    IR_OP_KIND_CALL_FN_IMPORT,
-    IR_OP_KIND_RETURN,
-    IR_OP_KIND_DATA_PTR,
-    IR_OP_KIND_BRANCH,
-} IrOpKind;
+    XIR_IR_OP_KIND_INT,
+    XIR_IR_OP_KIND_CALL_FN_IMPL,
+    XIR_IR_OP_KIND_CALL_FN_IMPORT,
+    XIR_IR_OP_KIND_RETURN,
+    XIR_IR_OP_KIND_DATA_PTR,
+    XIR_IR_OP_KIND_BRANCH,
+} XirIrOpKind;
 
-typedef size_t IrRegIndex;
-DYNARR_EASY_GEN(IrRegIndex);
+typedef size_t XirIrRegIndex;
+XIR_DYNARR_EASY_GEN(XirIrRegIndex);
 
-typedef unsigned long long IrOpInt;
+typedef unsigned long long XirIrOpInt;
 
-typedef struct IrOpCall {
+typedef struct XirIrOpCall {
     size_t fn;
-    IrRegIndexDynarr *inputs;
-} IrOpCall;
+    XirIrRegIndexDynarr *inputs;
+} XirIrOpCall;
 
-typedef IrRegIndex IrOpReturn;
+typedef XirIrRegIndex XirIrOpReturn;
 
-typedef size_t IrDataIndex;
-typedef IrDataIndex IrOpDataPtr;
-typedef size_t IrOpIndex;
+typedef size_t XirIrDataIndex;
+typedef XirIrDataIndex XirIrOpDataPtr;
+typedef size_t XirIrOpIndex;
 
-typedef struct IrOpBranch {
-    IrRegIndex cond;
-    IrOpIndex op;
-} IrOpBranch;
+typedef struct XirIrOpBranch {
+    XirIrRegIndex cond;
+    XirIrOpIndex op;
+} XirIrOpBranch;
 
-typedef struct IrOp {
-    IrOpKind kind;
+typedef struct XirIrOp {
+    XirIrOpKind kind;
     union {
-        IrOpInt _int;
-        IrOpCall call;
-        IrOpReturn _return;
-        IrOpDataPtr data_ptr;
-        IrOpBranch branch;
+        XirIrOpInt _int;
+        XirIrOpCall call;
+        XirIrOpReturn _return;
+        XirIrOpDataPtr data_ptr;
+        XirIrOpBranch branch;
     } u;
-} IrOp;
+} XirIrOp;
 
-DYNARR_EASY_GEN(IrOp);
+XIR_DYNARR_EASY_GEN(XirIrOp);
 
-typedef struct IrFnImpl {
-    IrFnTypeIndex type;
-    IrOpDynarr *ops;
-} IrFnImpl;
+typedef struct XirIrFnImpl {
+    XirIrFnTypeIndex type;
+    XirIrOpDynarr *ops;
+} XirIrFnImpl;
 
-DYNARR_EASY_GEN(IrFnImpl);
+XIR_DYNARR_EASY_GEN(XirIrFnImpl);
 
-typedef struct IrFnImport {
-    IrFnTypeIndex type;
+typedef struct XirIrFnImport {
+    XirIrFnTypeIndex type;
     LisStringView name;
-} IrFnImport;
+} XirIrFnImport;
 
-typedef size_t IrFnImplIndex;
-DYNARR_EASY_GEN(IrFnImport);
+typedef size_t XirIrFnImplIndex;
+XIR_DYNARR_EASY_GEN(XirIrFnImport);
 
-typedef struct IrFnExport {
-    IrFnImplIndex impl;
+typedef struct XirIrFnExport {
+    XirIrFnImplIndex impl;
     LisStringView name;
-} IrFnExport;
+} XirIrFnExport;
 
-DYNARR_EASY_GEN(IrFnExport);
+XIR_DYNARR_EASY_GEN(XirIrFnExport);
 
 typedef enum {
-    IR_DATA_FLAGS_READ_ONLY = 0x1,
-} IrDataFlags;
+    XIR_IR_DATA_FLAGS_READ_ONLY = 0x1,
+} XirIrDataFlags;
 
-typedef RAWR_DYNARR_GEN(unsigned char, UnsignedCharDynarr) UnsignedCharDynarr;
+typedef RAWR_DYNARR_GEN(unsigned char, XirUnsignedCharDynarr) XirUnsignedCharDynarr;
 
-typedef struct IrData {
-    IrDataFlags flags;
+typedef struct XirIrData {
+    XirIrDataFlags flags;
     unsigned int alignment;
-    UnsignedCharDynarr *bytes;
-} IrData;
+    XirUnsignedCharDynarr *bytes;
+} XirIrData;
 
-DYNARR_EASY_GEN(IrData);
+XIR_DYNARR_EASY_GEN(XirIrData);
 
-typedef struct Ir {
-    IrFnTypeDynarr *fn_types;
-    IrFnImplDynarr *fn_impls;
-    IrFnImportDynarr *fn_imports;
-    IrFnExportDynarr *fn_exports;
-    IrDataDynarr *datas;
-} Ir;
+typedef struct XirIr {
+    XirIrFnTypeDynarr *fn_types;
+    XirIrFnImplDynarr *fn_impls;
+    XirIrFnImportDynarr *fn_imports;
+    XirIrFnExportDynarr *fn_exports;
+    XirIrDataDynarr *datas;
+} XirIr;
 
-IrFnTypeIndex irOpCallFnTypeIndex(const Ir *ir, const IrOp *op);
+XirIrFnTypeIndex xirIrOpCallFnTypeIndex(const XirIr *ir, const XirIrOp *op);
 
 #endif

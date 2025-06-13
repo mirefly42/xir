@@ -1,32 +1,32 @@
-#ifndef INTERP_H
-#define INTERP_H
+#ifndef XIR_INTERP_H
+#define XIR_INTERP_H
 
 #include "ir.h"
 #include "utils.h"
 
-typedef unsigned long long InterpReg;
-DYNARR_EASY_GEN(InterpReg);
+typedef unsigned long long XirInterpReg;
+XIR_DYNARR_EASY_GEN(XirInterpReg);
 
-struct Interp;
-typedef void (*InterpImportedFn)(struct Interp *interp, size_t regs_base);
+struct XirInterp;
+typedef void (*XirInterpImportedFn)(struct XirInterp *interp, size_t regs_base);
 
-DYNARR_EASY_GEN(InterpImportedFn);
+XIR_DYNARR_EASY_GEN(XirInterpImportedFn);
 
-typedef RAWR_DYNARR_GEN(size_t, SizeTDynarr) SizeTDynarr;
+typedef RAWR_DYNARR_GEN(size_t, XirSizeTDynarr) XirSizeTDynarr;
 
-typedef struct Interp {
-    InterpRegDynarr *regs;
-    InterpImportedFnDynarr *imported_fns;
-    SizeTDynarr *data_ptrs;
-    const Ir *ir;
+typedef struct XirInterp {
+    XirInterpRegDynarr *regs;
+    XirInterpImportedFnDynarr *imported_fns;
+    XirSizeTDynarr *data_ptrs;
+    const XirIr *ir;
     unsigned char *data;
     size_t data_size;
     void *user_data;
-} Interp;
+} XirInterp;
 
-void interpInit(Interp *interp, const Ir *ir);
-void interpEvalImpl(Interp *interp, IrFnImplIndex impl_index, size_t regs_base);
-InterpReg interpGetReg(const Interp *interp, size_t regs_base, IrRegIndex index);
-void *interpGetData(Interp *interp, size_t offset);
+void xirInterpInit(XirInterp *interp, const XirIr *ir);
+void xirInterpEvalImpl(XirInterp *interp, XirIrFnImplIndex impl_index, size_t regs_base);
+XirInterpReg xirInterpGetReg(const XirInterp *interp, size_t regs_base, XirIrRegIndex index);
+void *xirInterpGetData(XirInterp *interp, size_t offset);
 
 #endif
