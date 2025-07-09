@@ -106,6 +106,7 @@ typedef struct XirIr {
     XirIrDataDynarr *datas;
 } XirIr;
 
+void xirIrInit(XirIr *ir);
 XirIrFnTypeIndex xirIrOpCallFnTypeIndex(const XirIr *ir, const XirIrOp *op);
 
 #endif
