@@ -38,6 +38,7 @@ void xirInterpEvalImpl(XirInterp *interp, XirIrFnImplIndex impl_index, size_t re
     const XirIrFnImpl *impl = interp->ir->fn_impls->d + impl_index;
 
     // ops_used_regs->d[i] contains the amount of used registers before execution of operation i
+    // relative to regs_base.
     XirSizeTDynarr *ops_used_regs;
     XIR_DYNARR_RESULT_CHECK(rawrDynarrCreate(
         XIR_DYNARR_GP(&ops_used_regs),
@@ -107,7 +108,7 @@ void xirInterpEvalImpl(XirInterp *interp, XirIrFnImplIndex impl_index, size_t re
             case XIR_IR_OP_KIND_BRANCH: {
                 XirIrOpBranch branch = op.u.branch;
                 if (xirInterpGetReg(interp, regs_base, branch.cond)) {
-                    interp->regs->h.length = ops_used_regs->d[branch.op];
+                    XIR_DYNARR_RESULT_CHECK(rawrDynarrResize(XIR_DYNARR_GP(&interp->regs), regs_base + ops_used_regs->d[branch.op]));
                     i = branch.op - 1; // HACK: subtract one to cancel out i++
                 }
                 break;
