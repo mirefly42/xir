@@ -5,7 +5,18 @@
 #include <lis/rawr_dynarr.h>
 #include <stdio.h>
 
-LisAtom nextAtomOrFail(LisNodesView *view) {
+static void skipComments(LisStringView source, LisNodesView *view) {
+    LisList *list;
+    while (lisNodesViewPeekList(view, &list) &&
+            list->h.length > 0 &&
+            lisNodeIsAtom(list->d[0]) &&
+            lisStringViewEqual(lisStringViewSliceWithRange(source, list->d[0].u.atom.range), XIR_SV("#"))) {
+        lisNodesViewSkip(view);
+    }
+}
+
+LisAtom nextAtomOrFail(LisStringView source, LisNodesView *view) {
+    skipComments(source, view);
     LisAtom atom;
     if (!lisNodesViewNextAtom(view, &atom)) {
         XIR_FATAL_ERROR("expected atom\n");
@@ -13,7 +24,8 @@ LisAtom nextAtomOrFail(LisNodesView *view) {
     return atom;
 }
 
-LisList *nextListOrFail(LisNodesView *view) {
+LisList *nextListOrFail(LisStringView source, LisNodesView *view) {
+    skipComments(source, view);
     LisList *list;
     if (!lisNodesViewNextList(view, &list)) {
         XIR_FATAL_ERROR("expected list\n");
@@ -22,7 +34,7 @@ LisList *nextListOrFail(LisNodesView *view) {
 }
 
 unsigned long long nextUllOrFail(LisStringView source, LisNodesView *view) {
-    LisAtom atom = nextAtomOrFail(view);
+    LisAtom atom = nextAtomOrFail(source, view);
     unsigned long long value;
     if (!lisStringViewToUll(lisStringViewSliceWithRange(source, atom.range), &value)) {
         XIR_FATAL_ERROR("expected number\n");
@@ -35,7 +47,7 @@ XirIrTypeDynarr *parseTypesList(LisStringView source, LisNodesView view) {
     XIR_DYNARR_EASY_CREATE(&types);
 
     while (!lisNodesViewIsEmpty(&view)) {
-        LisAtom type_name_atom = nextAtomOrFail(&view);
+        LisAtom type_name_atom = nextAtomOrFail(source, &view);
         LisStringView type_name = lisStringViewSliceWithRange(source, type_name_atom.range);
 
         XirIrType type = 0;
@@ -84,17 +96,17 @@ int main(int argc, char *argv[]) {
     XIR_DYNARR_EASY_CREATE(&ir.datas);
 
     while (!lisNodesViewIsEmpty(&view)) {
-        LisList *list = nextListOrFail(&view);
+        LisList *list = nextListOrFail(source, &view);
         LisNodesView view = lisNodesViewFromList(list); // NOTE: shadows top-level view
 
-        LisAtom name_atom = nextAtomOrFail(&view);
+        LisAtom name_atom = nextAtomOrFail(source, &view);
         LisStringView name = lisStringViewSliceWithRange(source, name_atom.range);
 
         if (lisStringViewEqual(name, XIR_SV("fn-type"))) {
-            LisNodesView input_types_view = lisNodesViewFromList(nextListOrFail(&view));
+            LisNodesView input_types_view = lisNodesViewFromList(nextListOrFail(source, &view));
             XirIrTypeDynarr *input_types = parseTypesList(source, input_types_view);
 
-            LisNodesView output_types_view = lisNodesViewFromList(nextListOrFail(&view));
+            LisNodesView output_types_view = lisNodesViewFromList(nextListOrFail(source, &view));
             XirIrTypeDynarr *output_types = parseTypesList(source, output_types_view);
 
             if (!lisNodesViewIsEmpty(&view)) {
@@ -108,10 +120,10 @@ int main(int argc, char *argv[]) {
             XIR_DYNARR_EASY_CREATE(&ops);
 
             while (!lisNodesViewIsEmpty(&view)) {
-                LisList *op_list = nextListOrFail(&view);
+                LisList *op_list = nextListOrFail(source, &view);
                 LisNodesView view = lisNodesViewFromList(op_list); // NOTE: shadow
 
-                LisAtom op_name_atom = nextAtomOrFail(&view);
+                LisAtom op_name_atom = nextAtomOrFail(source, &view);
                 LisStringView op_name = lisStringViewSliceWithRange(source, op_name_atom.range);
 
                 XirIrOp op = {0};
@@ -163,7 +175,7 @@ int main(int argc, char *argv[]) {
             XIR_DYNARR_UNSAFE_PUSH(&ir.fn_impls, ((XirIrFnImpl){fn_type_index, ops}));
         } else if (lisStringViewEqual(name, XIR_SV("fn-import"))) {
             XirIrFnTypeIndex fn_type_index = nextUllOrFail(source, &view);
-            LisAtom fn_name_atom = nextAtomOrFail(&view);
+            LisAtom fn_name_atom = nextAtomOrFail(source, &view);
             if (!lisNodesViewIsEmpty(&view)) {
                 XIR_FATAL_ERROR("fn-import directive expects 2 arguments\n");
             }
@@ -171,19 +183,19 @@ int main(int argc, char *argv[]) {
             XIR_DYNARR_UNSAFE_PUSH(&ir.fn_imports, ((XirIrFnImport){fn_type_index, lisStringViewSliceWithRange(source, fn_name_atom.range)}));
         } else if (lisStringViewEqual(name, XIR_SV("fn-export"))) {
             XirIrFnImplIndex fn_impl_index = nextUllOrFail(source, &view);
-            LisAtom fn_name_atom = nextAtomOrFail(&view);
+            LisAtom fn_name_atom = nextAtomOrFail(source, &view);
             if (!lisNodesViewIsEmpty(&view)) {
                 XIR_FATAL_ERROR("fn-export directive expects 2 arguments\n");
             }
 
             XIR_DYNARR_UNSAFE_PUSH(&ir.fn_exports, ((XirIrFnExport){fn_impl_index, lisStringViewSliceWithRange(source, fn_name_atom.range)}));
         } else if (lisStringViewEqual(name, XIR_SV("data"))) {
-            LisList *flags_list = nextListOrFail(&view);
+            LisList *flags_list = nextListOrFail(source, &view);
             LisNodesView flags_view = lisNodesViewFromList(flags_list);
 
             XirIrData data = {0};
             while (!lisNodesViewIsEmpty(&flags_view)) {
-                LisAtom flag_atom = nextAtomOrFail(&flags_view);
+                LisAtom flag_atom = nextAtomOrFail(source, &flags_view);
                 LisStringView flag_name = lisStringViewSliceWithRange(source, flag_atom.range);
                 if (lisStringViewEqual(flag_name, XIR_SV("read-only"))) {
                     data.flags |= XIR_IR_DATA_FLAGS_READ_ONLY;
