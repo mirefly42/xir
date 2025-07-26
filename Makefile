@@ -5,8 +5,8 @@ BINDIR = ${DESTDIR}${PREFIX}/bin
 LIBDIR = ${DESTDIR}${PREFIX}/lib
 HDRDIR = ${DESTDIR}${PREFIX}/include/xir
 
-SRC = interp.c ir.c nasm.c utils.c validation.c
-HDR = interp.h ir.h nasm.h utils.h validation.h
+SRC = dump.c interp.c ir.c nasm.c utils.c validation.c
+HDR = dump.h interp.h ir.h nasm.h utils.h validation.h
 OBJ = ${SRC:.c=.o}
 LIBS = -llis
 
