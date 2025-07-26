@@ -3,6 +3,7 @@
 #include "validation.h"
 #include <lis/parser.h>
 #include <lis/rawr_dynarr.h>
+#include <stdint.h>
 #include <stdio.h>
 
 static void skipComments(LisStringView source, LisNodesView *view) {
@@ -65,13 +66,57 @@ XirIrTypeDynarr *parseTypesList(LisStringView source, LisNodesView view) {
     return types;
 }
 
+static LisStringView readEntireFile(const char *path) {
+    FILE *stream = fopen(path, "rb");
+    if (!stream) {
+        perror("fopen");
+        abort();
+    }
+
+    if (fseek(stream, 0, SEEK_END) < 0) {
+        perror("fseek");
+        abort();
+    }
+
+    long size = ftell(stream);
+    if (size < 0) {
+        perror("ftell");
+        abort();
+    }
+
+    if ((unsigned long long)size > SIZE_MAX) {
+        fprintf(stderr, "error: input file is too large\n");
+        abort();
+    }
+
+    if (fseek(stream, 0, SEEK_SET) < 0) {
+        perror("fseek");
+        abort();
+    }
+
+    char *buf = malloc(size);
+    if (!buf) {
+        perror("malloc");
+        abort();
+    }
+
+    if (fread(buf, 1, size, stream) != (size_t)size) {
+        perror("fread");
+        abort();
+    }
+
+    fclose(stream);
+
+    return (LisStringView){buf, size};
+}
+
 int main(int argc, char *argv[]) {
     if (argc != 2) {
-        fprintf(stderr, "Usage: %s source\n", argv[0]);
+        fprintf(stderr, "Usage: %s file\n", argv[0]);
         return 1;
     }
 
-    LisStringView source = lisStringViewFromCString(argv[1]);
+    LisStringView source = readEntireFile(argv[1]);
 
     LisParser parser;
     if (lisParserInit(&parser, source)) {
