@@ -45,14 +45,16 @@ void xirValidateIr(const XirIr *ir) {
         VALIDATE(isPowerOfTwo(data->alignment));
     }
 
+    XirIrTypeDynarr *reg_types;
+    XIR_DYNARR_EASY_CREATE(&reg_types);
     for (size_t fn_impl_index = 0; fn_impl_index < ir->fn_impls->h.length; fn_impl_index++) {
-        XirIrTypeDynarr *reg_types;
-        XIR_DYNARR_EASY_CREATE(&reg_types);
-
         const XirIrFnImpl *fn_impl = ir->fn_impls->d + fn_impl_index;
 
         VALIDATE(fn_impl->type < ir->fn_types->h.length);
         const XirIrFnType *fn_type = ir->fn_types->d + fn_impl->type;
+
+        XIR_DYNARR_RESULT_CHECK(rawrDynarrResize(XIR_DYNARR_GP(&reg_types), fn_type->input_types->h.length));
+        memcpy(reg_types->d, fn_type->input_types->d, reg_types->h.length * sizeof(reg_types->d[0]));
 
         for (size_t op_index = 0; op_index < fn_impl->ops->h.length; op_index++) {
             const XirIrOp *op = fn_impl->ops->d + op_index;
@@ -121,4 +123,5 @@ void xirValidateIr(const XirIr *ir) {
             }
         }
     }
+    rawrDynarrDestroy(XIR_DYNARR_GP(&reg_types));
 }
