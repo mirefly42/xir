@@ -1,3 +1,4 @@
+#include "interp.h"
 #include "ir.h"
 #include "nasm.h"
 #include "validation.h"
@@ -110,13 +111,42 @@ static LisStringView readEntireFile(const char *path) {
     return (LisStringView){buf, size};
 }
 
+static void printUsage(int argc, char *argv[]) {
+    fprintf(stderr, "Usage: %s [-i] file\n", argc ? argv[0] : "");
+}
+
 int main(int argc, char *argv[]) {
-    if (argc != 2) {
-        fprintf(stderr, "Usage: %s file\n", argv[0]);
-        return 1;
+    const char *source_path = NULL;
+    bool opt_interp = false;
+
+    for (int i = 1; i < argc; i++) {
+        const char *arg = argv[i];
+        if (arg[0] == '-') {
+            if (strcmp(arg, "-i") == 0) {
+                opt_interp = true;
+            } else {
+                fprintf(stderr, "error: invalid flag '%s'\n", arg);
+                printUsage(argc, argv);
+                abort();
+            }
+        } else {
+            if (!source_path) {
+                source_path = arg;
+            } else {
+                fprintf(stderr, "error: processing multiple input files isn't supported\n");
+                printUsage(argc, argv);
+                abort();
+            }
+        }
     }
 
-    LisStringView source = readEntireFile(argv[1]);
+    if (!source_path) {
+        fprintf(stderr, "error: missing input file\n");
+        printUsage(argc, argv);
+        abort();
+    }
+
+    LisStringView source = readEntireFile(source_path);
 
     LisParser parser;
     if (lisParserInit(&parser, source)) {
@@ -268,5 +298,25 @@ int main(int argc, char *argv[]) {
     }
 
     xirValidateIr(&ir);
-    xirGenerateNasm(&ir);
+    if (opt_interp) {
+        XirInterp interp = {0};
+        xirInterpInit(&interp, &ir);
+        for (size_t i = 0; i < interp.ir->fn_exports->h.length; i++) {
+            const XirIrFnExport *export = interp.ir->fn_exports->d + i;
+            if (lisStringViewEqual(export->name, XIR_SV("main"))) {
+                xirInterpEvalImpl(&interp, i, 0);
+                if (interp.regs->h.length > 0) {
+                    return interp.regs->d[RAWR_DYNARR_LAST_INDEX(interp.regs)];
+                } else {
+                    fprintf(stderr, "error: no registers remains after evaluation of \"main\" function\n");
+                    abort();
+                }
+            }
+        }
+
+        fprintf(stderr, "error: ir doesn't export \"main\" function\n");
+        abort();
+    } else {
+        xirGenerateNasm(&ir);
+    }
 }
