@@ -22,6 +22,7 @@ libxir.a: ${OBJ}
 	${CC} -c -o $@ $< ${CFLAGS}
 
 ${OBJ}: ${HDR}
+irc.o: ${HDR}
 
 install: all
 	mkdir -p -- "${BINDIR}"
