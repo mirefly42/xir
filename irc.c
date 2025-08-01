@@ -187,11 +187,7 @@ int main(int argc, char *argv[]) {
     LisNodesView view = lisNodesViewFromList(root);
 
     XirIr ir = {0};
-    XIR_DYNARR_EASY_CREATE(&ir.fn_types);
-    XIR_DYNARR_EASY_CREATE(&ir.fn_impls);
-    XIR_DYNARR_EASY_CREATE(&ir.fn_imports);
-    XIR_DYNARR_EASY_CREATE(&ir.fn_exports);
-    XIR_DYNARR_EASY_CREATE(&ir.datas);
+    xirIrInit(&ir);
 
     while (!lisNodesViewIsEmpty(&view)) {
         LisList *list = nextListOrFail(source, &view);
