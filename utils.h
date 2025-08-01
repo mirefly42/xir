@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define XIR_STATIC_ARRAY_LENGTH(array) (sizeof(array) / sizeof((array)[0]))
+
 #define XIR_SV lisStringViewFromCString
 
 #define XIR_FATAL_ERROR(...) do { \
@@ -32,6 +34,7 @@
         (**(dynarr_pp)).d[RAWR_DYNARR_LAST_INDEX(*(dynarr_pp))] = (value); \
     } while (0)
 
+RawrDynarrResult xirDynarrEnsureLength(RawrDynarrGeneralPointer gp, size_t length);
 void *xirCheckedMalloc(size_t size);
 
 #endif

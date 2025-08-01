@@ -74,6 +74,8 @@ typedef struct XirIrFnImport {
     LisStringView name;
 } XirIrFnImport;
 
+typedef size_t XirIrFnImportIndex;
+
 typedef size_t XirIrFnImplIndex;
 XIR_DYNARR_EASY_GEN(XirIrFnImport);
 

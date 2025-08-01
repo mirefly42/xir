@@ -1,7 +1,9 @@
+#include "foreign_imports.h"
 #include "interp.h"
 #include "ir.h"
 #include "nasm.h"
 #include "validation.h"
+#include <dlfcn.h>
 #include <lis/parser.h>
 #include <lis/rawr_dynarr.h>
 #include <stdint.h>
@@ -112,18 +114,34 @@ static LisStringView readEntireFile(const char *path) {
 }
 
 static void printUsage(int argc, char *argv[]) {
-    fprintf(stderr, "Usage: %s [-i] file\n", argc ? argv[0] : "");
+    fprintf(stderr, "Usage: %s [-i] [-l library] file\n", argc ? argv[0] : "");
 }
+
+typedef void *XirVoidPtr;
+XIR_DYNARR_EASY_GEN(XirVoidPtr);
+
+typedef char *XirCString;
+XIR_DYNARR_EASY_GEN(XirCString);
 
 int main(int argc, char *argv[]) {
     const char *source_path = NULL;
     bool opt_interp = false;
-
+    XirCStringDynarr *libraries = NULL;
+    XIR_DYNARR_EASY_CREATE(&libraries);
     for (int i = 1; i < argc; i++) {
         const char *arg = argv[i];
         if (arg[0] == '-') {
             if (strcmp(arg, "-i") == 0) {
                 opt_interp = true;
+            } else if (strcmp(arg, "-l") == 0) {
+                char *library_path = argv[++i];
+                if (!library_path) {
+                    fprintf(stderr, "error: option '%s' requires an argument\n", arg);
+                    printUsage(argc, argv);
+                    abort();
+                }
+
+                XIR_DYNARR_UNSAFE_PUSH(&libraries, library_path);
             } else {
                 fprintf(stderr, "error: invalid flag '%s'\n", arg);
                 printUsage(argc, argv);
@@ -143,6 +161,11 @@ int main(int argc, char *argv[]) {
     if (!source_path) {
         fprintf(stderr, "error: missing input file\n");
         printUsage(argc, argv);
+        abort();
+    }
+
+    if (libraries->h.length > 0 && !opt_interp) {
+        fprintf(stderr, "error: can't load libraries in compilation mode\n");
         abort();
     }
 
@@ -299,8 +322,31 @@ int main(int argc, char *argv[]) {
 
     xirValidateIr(&ir);
     if (opt_interp) {
+        XirVoidPtrDynarr *library_handles = NULL;
+        XIR_DYNARR_RESULT_CHECK(rawrDynarrCreate(XIR_DYNARR_GP(&library_handles), libraries->h.length, libraries->h.length, rawr_dynarr_default_allocator));
+
+        for (size_t i = 0; i < libraries->h.length; i++) {
+            void *handle = dlopen(libraries->d[i], RTLD_LAZY | RTLD_LOCAL);
+            if (!handle) {
+                XIR_FATAL_ERROR("failed to load library '%s': %s\n", libraries->d[i], dlerror());
+            }
+
+            library_handles->d[i] = handle;
+        }
+
+        XirForeignFnImportsCaller foreign_fn_imports_caller = {0};
+        xirForeignFnImportsCallerInit(&foreign_fn_imports_caller);
+        xirForeignFnImportsCallerLoadAllForeignFnImportsFromDynamicLibraries(
+            &foreign_fn_imports_caller,
+            &ir,
+            library_handles->d,
+            library_handles->h.length
+        );
+
         XirInterp interp = {0};
-        xirInterpInit(&interp, &ir);
+        xirInterpInit(&interp, &ir, xirForeignFnImportsCallerCallImportCallback);
+        interp.user_data = &foreign_fn_imports_caller;
+
         for (size_t i = 0; i < interp.ir->fn_exports->h.length; i++) {
             const XirIrFnExport *export = interp.ir->fn_exports->d + i;
             if (lisStringViewEqual(export->name, XIR_SV("main"))) {

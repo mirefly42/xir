@@ -1,10 +1,9 @@
 #include "interp.h"
 #include <assert.h>
 
-void xirInterpInit(XirInterp *interp, const XirIr *ir) {
+void xirInterpInit(XirInterp *interp, const XirIr *ir, XirInterpCallImportCallback call_import_callback) {
     *interp = (XirInterp){0};
     XIR_DYNARR_EASY_CREATE(&interp->regs);
-    XIR_DYNARR_EASY_CREATE(&interp->imported_fns);
     XIR_DYNARR_RESULT_CHECK(rawrDynarrCreate(
         XIR_DYNARR_GP(&interp->data_ptrs),
         0,
@@ -32,6 +31,8 @@ void xirInterpInit(XirInterp *interp, const XirIr *ir) {
     // TODO: would be cool to set memory protection flags on read-only data
     //       entries, to make the program safely crash in case an imported
     //       function tries to modify read-only data.
+
+    interp->call_import_callback = call_import_callback;
 }
 
 void xirInterpEvalImpl(XirInterp *interp, XirIrFnImplIndex impl_index, size_t regs_base) {
@@ -91,7 +92,7 @@ void xirInterpEvalImpl(XirInterp *interp, XirIrFnImplIndex impl_index, size_t re
                         xirInterpEvalImpl(interp, call.fn, callee_regs_base);
                         break;
                     case XIR_IR_OP_KIND_CALL_FN_IMPORT:
-                        interp->imported_fns->d[call.fn](interp, callee_regs_base);
+                        interp->call_import_callback(interp, callee_regs_base, call.fn, interp->user_data);
                         break;
                     default:
                         assert(0 && "unreachable");
@@ -103,7 +104,7 @@ void xirInterpEvalImpl(XirInterp *interp, XirIrFnImplIndex impl_index, size_t re
                 XIR_DYNARR_UNSAFE_PUSH(&interp->regs, xirInterpGetReg(interp, regs_base, op.u._return));
                 return;
             case XIR_IR_OP_KIND_DATA_PTR:
-                XIR_DYNARR_UNSAFE_PUSH(&interp->regs, interp->data_ptrs->d[op.u.data_ptr]);
+                XIR_DYNARR_UNSAFE_PUSH(&interp->regs, (XirInterpReg)(interp->data + interp->data_ptrs->d[op.u.data_ptr]));
                 break;
             case XIR_IR_OP_KIND_BRANCH: {
                 XirIrOpBranch branch = op.u.branch;

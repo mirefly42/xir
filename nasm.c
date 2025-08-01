@@ -1,7 +1,5 @@
 #include "nasm.h"
 
-#define STATIC_ARRAY_LENGTH(array) (sizeof(array) / sizeof((array)[0]))
-
 #define STACK_ALIGNMENT 16
 
 static const char *input_int_regs[] = {
@@ -98,8 +96,8 @@ void xirGenerateNasm(const XirIr *ir) {
             XirIrType type = input_types->d[i];
             switch (type) {
                 case XIR_IR_TYPE_INT:
-                    if (used_ints >= STATIC_ARRAY_LENGTH(input_int_regs)) {
-                        XIR_FATAL_ERROR("support for function impls with more than %zu integer inputs isn't implemented\n", STATIC_ARRAY_LENGTH(input_int_regs));
+                    if (used_ints >= XIR_STATIC_ARRAY_LENGTH(input_int_regs)) {
+                        XIR_FATAL_ERROR("support for function impls with more than %zu integer inputs isn't implemented\n", XIR_STATIC_ARRAY_LENGTH(input_int_regs));
                     }
                     stack_top += xirIrTypeSize(type);
                     printf("    push %s\n", input_int_regs[used_ints]);
@@ -165,8 +163,8 @@ void xirGenerateNasm(const XirIr *ir) {
                         XirIrType input_type = callee_type.input_types->d[i];
                         switch (input_type) {
                             case XIR_IR_TYPE_INT:
-                                if (used_ints >= STATIC_ARRAY_LENGTH(input_int_regs)) {
-                                    XIR_FATAL_ERROR("support for function calls with more than %zu integer inputs isn't implemented\n", STATIC_ARRAY_LENGTH(input_int_regs));
+                                if (used_ints >= XIR_STATIC_ARRAY_LENGTH(input_int_regs)) {
+                                    XIR_FATAL_ERROR("support for function calls with more than %zu integer inputs isn't implemented\n", XIR_STATIC_ARRAY_LENGTH(input_int_regs));
                                 }
                                 printf("    mov %s,", input_int_regs[used_ints]);
                                 emitReg(regs, call.inputs->d[i]);
@@ -199,8 +197,8 @@ void xirGenerateNasm(const XirIr *ir) {
                         XirIrType output_type = callee_type.output_types->d[i];
                         switch (output_type) {
                             case XIR_IR_TYPE_INT:
-                                if (used_ints >= STATIC_ARRAY_LENGTH(output_int_regs)) {
-                                    XIR_FATAL_ERROR("support for function calls with more than %zu integer outputs isn't implemented\n", STATIC_ARRAY_LENGTH(output_int_regs));
+                                if (used_ints >= XIR_STATIC_ARRAY_LENGTH(output_int_regs)) {
+                                    XIR_FATAL_ERROR("support for function calls with more than %zu integer outputs isn't implemented\n", XIR_STATIC_ARRAY_LENGTH(output_int_regs));
                                 }
                                 printf("    mov ");
                                 emitReg(regs, used_ir_regs++);

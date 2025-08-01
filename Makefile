@@ -5,10 +5,10 @@ BINDIR = ${DESTDIR}${PREFIX}/bin
 LIBDIR = ${DESTDIR}${PREFIX}/lib
 HDRDIR = ${DESTDIR}${PREFIX}/include/xir
 
-SRC = dump.c interp.c ir.c nasm.c utils.c validation.c
-HDR = dump.h interp.h ir.h nasm.h utils.h validation.h
+SRC = bit_set.c dump.c foreign_imports.c interp.c ir.c nasm.c utils.c validation.c
+HDR = bit_set.h dump.h foreign_imports.h interp.h ir.h nasm.h utils.h validation.h
 OBJ = ${SRC:.c=.o}
-LIBS = -llis
+LIBS = -lffi -llis
 
 all: xirc libxir.a
 
