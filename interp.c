@@ -102,7 +102,7 @@ void xirInterpEvalImpl(XirInterp *interp, XirIrFnImplIndex impl_index, size_t re
             case XIR_IR_OP_KIND_RETURN:
                 interp->regs->h.length = regs_base;
                 XIR_DYNARR_UNSAFE_PUSH(&interp->regs, xirInterpGetReg(interp, regs_base, op.u._return));
-                return;
+                goto cleanup;
             case XIR_IR_OP_KIND_DATA_PTR:
                 XIR_DYNARR_UNSAFE_PUSH(&interp->regs, (XirInterpReg)(interp->data + interp->data_ptrs->d[op.u.data_ptr]));
                 break;
@@ -116,6 +116,9 @@ void xirInterpEvalImpl(XirInterp *interp, XirIrFnImplIndex impl_index, size_t re
             }
         }
     }
+
+    cleanup:
+    rawrDynarrDestroy(XIR_DYNARR_GP(&ops_used_regs));
 }
 
 XirInterpReg xirInterpGetReg(const XirInterp *interp, size_t regs_base, XirIrRegIndex index) {
