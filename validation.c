@@ -107,7 +107,6 @@ void xirValidateIr(const XirIr *ir) {
 
                     VALIDATE(fn_type->output_types->h.length == 1);
                     VALIDATE(fn_type->output_types->d[0] == return_op_type);
-                    XIR_DYNARR_UNSAFE_PUSH(&reg_types, return_op_type);
                     break;
                 }
                 case XIR_IR_OP_KIND_DATA_PTR:
