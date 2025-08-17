@@ -38,7 +38,9 @@ typedef struct XirIrOpCall {
     XirIrRegIndexDynarr *inputs;
 } XirIrOpCall;
 
-typedef XirIrRegIndex XirIrOpReturn;
+typedef struct XirIrOpReturn {
+    XirIrRegIndexDynarr *outputs;
+} XirIrOpReturn;
 
 typedef size_t XirIrDataIndex;
 typedef XirIrDataIndex XirIrOpDataPtr;

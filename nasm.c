@@ -212,15 +212,23 @@ void xirGenerateNasm(const XirIr *ir) {
                     }
                     break;
                 }
-                case XIR_IR_OP_KIND_RETURN:
-                    printf("    mov rax,");
-                    emitReg(regs, op.u._return);
-                    printf("\n");
+                case XIR_IR_OP_KIND_RETURN: {
+                    XirIrOpReturn _return = op.u._return;
+                    if (_return.outputs->h.length > XIR_STATIC_ARRAY_LENGTH(output_int_regs)) {
+                        XIR_FATAL_ERROR("support for function impls with more than %zu integer outputs isn't implemented\n", XIR_STATIC_ARRAY_LENGTH(output_int_regs));
+                    }
+
+                    for (size_t i = 0; i < _return.outputs->h.length; i++) {
+                        printf("    mov %s,", output_int_regs[i]);
+                        emitReg(regs, _return.outputs->d[i]);
+                        printf("\n");
+                    }
 
                     printf("    mov rsp,rbp\n");
                     printf("    pop rbp\n");
                     printf("    ret\n");
                     break;
+                }
                 case XIR_IR_OP_KIND_DATA_PTR:
                     printf("    lea rax,[data_%zu]\n", op.u.data_ptr);
                     printf("    mov ");

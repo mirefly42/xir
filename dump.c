@@ -113,7 +113,10 @@ void xirDumpIr(const XirIr *ir) {
                     break;
                 }
                 case XIR_IR_OP_KIND_RETURN:
-                    printf("return %zu", op->u._return);
+                    printf("return");
+                    for (size_t i = 0; i < op->u._return.outputs->h.length; i++) {
+                        printf(" %zu", op->u._return.outputs->d[i]);
+                    }
                     break;
                 case XIR_IR_OP_KIND_DATA_PTR:
                     xirDumpRegsRange(used_regs++, 1);

@@ -242,9 +242,15 @@ int main(int argc, char *argv[]) {
                         {.call = {index, inputs}},
                     };
                 } else if (lisStringViewEqual(op_name, XIR_SV("return"))) {
+                    XirIrRegIndexDynarr *outputs;
+                    XIR_DYNARR_EASY_CREATE(&outputs);
+                    while (!lisNodesViewIsEmpty(&view)) {
+                        XIR_DYNARR_UNSAFE_PUSH(&outputs, nextUllOrFail(source, &view));
+                    }
+
                     op = (XirIrOp){
                         XIR_IR_OP_KIND_RETURN,
-                        {._return = nextUllOrFail(source, &view)},
+                        {._return = {outputs}},
                     };
                 } else if (lisStringViewEqual(op_name, XIR_SV("data-ptr"))) {
                     op = (XirIrOp){

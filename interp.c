@@ -99,10 +99,19 @@ void xirInterpEvalImpl(XirInterp *interp, XirIrFnImplIndex impl_index, size_t re
                 }
                 break;
             }
-            case XIR_IR_OP_KIND_RETURN:
-                interp->regs->h.length = regs_base;
-                XIR_DYNARR_UNSAFE_PUSH(&interp->regs, xirInterpGetReg(interp, regs_base, op.u._return));
+            case XIR_IR_OP_KIND_RETURN: {
+                XirIrOpReturn _return = op.u._return;
+                XirInterpReg *return_regs_buf = xirCheckedMalloc(_return.outputs->h.length * sizeof(return_regs_buf[0]));
+
+                for (size_t i = 0; i < _return.outputs->h.length; i++) {
+                    return_regs_buf[i] = xirInterpGetReg(interp, regs_base, _return.outputs->d[i]);
+                }
+
+                XIR_DYNARR_RESULT_CHECK(rawrDynarrResize(XIR_DYNARR_GP(&interp->regs), regs_base + _return.outputs->h.length));
+                memcpy(interp->regs->d + regs_base, return_regs_buf, _return.outputs->h.length * sizeof(return_regs_buf[0]));
+                free(return_regs_buf);
                 goto cleanup;
+            }
             case XIR_IR_OP_KIND_DATA_PTR:
                 XIR_DYNARR_UNSAFE_PUSH(&interp->regs, (XirInterpReg)(interp->data + interp->data_ptrs->d[op.u.data_ptr]));
                 break;

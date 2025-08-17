@@ -101,12 +101,14 @@ void xirValidateIr(const XirIr *ir) {
                     break;
                 }
                 case XIR_IR_OP_KIND_RETURN: {
-                    XirIrRegIndex return_reg_index = op->u._return;
-                    VALIDATE(return_reg_index < reg_types->h.length);
-                    XirIrType return_op_type = reg_types->d[return_reg_index];
+                    XirIrOpReturn _return = op->u._return;
+                    VALIDATE(fn_type->output_types->h.length == _return.outputs->h.length);
 
-                    VALIDATE(fn_type->output_types->h.length == 1);
-                    VALIDATE(fn_type->output_types->d[0] == return_op_type);
+                    for (size_t i = 0; i < _return.outputs->h.length; i++) {
+                        XirIrRegIndex return_reg_index = _return.outputs->d[i];
+                        VALIDATE(return_reg_index < reg_types->h.length);
+                        VALIDATE(fn_type->output_types->d[i] == reg_types->d[return_reg_index]);
+                    }
                     break;
                 }
                 case XIR_IR_OP_KIND_DATA_PTR:
