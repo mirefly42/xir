@@ -29,16 +29,17 @@ void xirForeignFnImportsCallerCallImportCallback(XirInterp *interp, size_t regs_
         args[i] = interp->regs->d + regs_base + i;
     }
 
-    XirInterpReg result;
-    ffi_call(cif, fn_ptr, &result, args);
-    interp->regs->h.length = regs_base;
-    if (fn_type->output_types->h.length > 0) {
-        assert(fn_type->output_types->h.length == 1);
-        if (fn_type->output_types->d[0] != XIR_IR_TYPE_INT) {
+    for (size_t i = 0; i < fn_type->output_types->h.length; i++) {
+        if (fn_type->output_types->d[i] != XIR_IR_TYPE_INT) {
             XIR_FATAL_ERROR("support for calling foreign function imports with non-integer outputs isn't implemented\n");
         }
-        XIR_DYNARR_UNSAFE_PUSH(&interp->regs, result);
     }
+
+    XirInterpReg *result = xirCheckedMalloc(sizeof(result[0]) * fn_type->output_types->h.length);
+    ffi_call(cif, fn_ptr, result, args);
+    XIR_DYNARR_RESULT_CHECK(rawrDynarrResize(XIR_DYNARR_GP(&interp->regs), regs_base + fn_type->output_types->h.length));
+    memcpy(interp->regs->d + regs_base, result, sizeof(result[0]) * fn_type->output_types->h.length);
+    free(result);
 }
 
 static ffi_type *xirFfiTypeFromIrType(XirIrType type) {
@@ -60,12 +61,22 @@ void xirPrepareFfiCifFromFnType(const XirIrFnType *fn_type, ffi_cif *cif) {
     }
 
     ffi_type *return_type = &ffi_type_void;
-    if (fn_type->output_types->h.length > 0) {
-        if (fn_type->output_types->h.length > 1) {
-            XIR_FATAL_ERROR("support for foreign function imports with more than 1 output isn't implemented\n");
-        }
-
+    if (fn_type->output_types->h.length == 1) {
         return_type = xirFfiTypeFromIrType(fn_type->output_types->d[0]);
+    } else if (fn_type->output_types->h.length > 1) {
+        ffi_type **elements = xirCheckedMalloc(sizeof(elements[0]) * (fn_type->output_types->h.length + 1));
+        for (size_t i = 0; i < fn_type->output_types->h.length; i++) {
+            elements[i] = xirFfiTypeFromIrType(fn_type->output_types->d[i]);
+        }
+        elements[fn_type->output_types->h.length] = NULL;
+
+        return_type = xirCheckedMalloc(sizeof(*return_type));
+        *return_type = (ffi_type){
+            .size = 0,
+            .alignment = 0,
+            .type = FFI_TYPE_STRUCT,
+            .elements = elements,
+        };
     }
 
     ffi_status status = ffi_prep_cif(cif, FFI_DEFAULT_ABI, fn_type->input_types->h.length, return_type, arg_types);
