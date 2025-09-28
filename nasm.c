@@ -50,9 +50,32 @@ void emitReg(const RegDynarr *regs, XirIrRegIndex index) {
             printf("%llu", reg.u.imm_int);
             break;
         case REG_KIND_STACK:
-            printf("[rbp-%llu]", reg.u.stack.offset);
+            if (reg.u.stack.offset >> 63) {
+                printf("[rbp+%llu]", - reg.u.stack.offset);
+            } else {
+                printf("[rbp-%llu]", reg.u.stack.offset);
+            }
             break;
     }
+}
+
+typedef struct XirFnTypeAnalysis {
+    size_t inputs_count_table[XIR_IR_TYPES_COUNT];
+    size_t outputs_count_table[XIR_IR_TYPES_COUNT];
+} XirFnTypeAnalysis;
+
+static XirFnTypeAnalysis xirAnalyzeFnType(XirIrFnType fn_type) {
+    XirFnTypeAnalysis result = {0};
+
+    for (size_t i = 0; i < fn_type.input_types->h.length; i++) {
+        result.inputs_count_table[fn_type.input_types->d[i]]++;
+    }
+
+    for (size_t i = 0; i < fn_type.output_types->h.length; i++) {
+        result.outputs_count_table[fn_type.output_types->d[i]]++;
+    }
+
+    return result;
 }
 
 void xirGenerateNasm(const XirIr *ir) {
@@ -88,30 +111,27 @@ void xirGenerateNasm(const XirIr *ir) {
         printf("    push rbp\n");
         printf("    mov rbp,rsp\n");
 
-        const XirIrTypeDynarr *input_types = ir->fn_types->d[impl.type].input_types;
-
-        size_t used_ints = 0;
         unsigned long long stack_top = 0;
-        for (size_t i = 0; i < input_types->h.length; i++) {
-            XirIrType type = input_types->d[i];
-            switch (type) {
-                case XIR_IR_TYPE_INT:
-                    if (used_ints >= XIR_STATIC_ARRAY_LENGTH(input_int_regs)) {
-                        XIR_FATAL_ERROR("support for function impls with more than %zu integer inputs isn't implemented\n", XIR_STATIC_ARRAY_LENGTH(input_int_regs));
-                    }
-                    stack_top += xirIrTypeSize(type);
-                    printf("    push %s\n", input_int_regs[used_ints]);
-                    used_ints++;
-                    XIR_DYNARR_UNSAFE_PUSH(&regs, ((Reg){REG_KIND_STACK, {.stack = {stack_top}}}));
-                    break;
-                case XIR_IR_TYPE_FLOAT:
-                    XIR_FATAL_ERROR("support for function impls with floating point inputs isn't implemented\n");
-                    break;
+        XirFnTypeAnalysis impl_fn_type_analysis = xirAnalyzeFnType(ir->fn_types->d[impl.type]);
+        if (impl_fn_type_analysis.inputs_count_table[XIR_IR_TYPE_FLOAT] > 0 || impl_fn_type_analysis.outputs_count_table[XIR_IR_TYPE_FLOAT] > 0) {
+            XIR_FATAL_ERROR("floats aren't implemented\n");
+        }
+
+        bool impl_return_on_memory = impl_fn_type_analysis.outputs_count_table[XIR_IR_TYPE_INT] > XIR_STATIC_ARRAY_LENGTH(output_int_regs);
+        for (size_t i = 0; i < impl_fn_type_analysis.inputs_count_table[XIR_IR_TYPE_INT]; i++) {
+            size_t input_int_reg_i = impl_return_on_memory + i;
+            if (input_int_reg_i < XIR_STATIC_ARRAY_LENGTH(input_int_regs)) {
+                printf("    push %s\n", input_int_regs[input_int_reg_i]);
+                stack_top += xirIrTypeSize(XIR_IR_TYPE_INT);
+                XIR_DYNARR_UNSAFE_PUSH(&regs, ((Reg){REG_KIND_STACK, {.stack = {stack_top}}}));
+            } else {
+                XIR_DYNARR_UNSAFE_PUSH(&regs, ((Reg){REG_KIND_STACK, {.stack = {
+                    - (2 + input_int_reg_i - XIR_STATIC_ARRAY_LENGTH(input_int_regs)) * xirIrTypeSize(XIR_IR_TYPE_INT)
+                }}}));
             }
         }
 
         unsigned long long stack_pre_alloc_base = stack_top;
-
         for (size_t i = 0; i < impl.ops->h.length; i++) {
             XirIrOp op = impl.ops->d[i];
             switch (op.kind) {
@@ -120,20 +140,24 @@ void xirGenerateNasm(const XirIr *ir) {
                     break;
                 case XIR_IR_OP_KIND_CALL_FN_IMPL:
                 case XIR_IR_OP_KIND_CALL_FN_IMPORT: {
-                    XirIrFnTypeIndex fn_type_index = xirIrOpCallFnTypeIndex(ir, &op);
-                    const XirIrTypeDynarr *output_types = ir->fn_types->d[fn_type_index].output_types;
-                    for (size_t i = 0; i < output_types->h.length; i++) {
-                        unsigned long long output_type_size = xirIrTypeSize(output_types->d[i]);
-                        stack_top += output_type_size;
+                    XirIrFnType callee_fn_type = ir->fn_types->d[xirIrOpCallFnTypeIndex(ir, &op)];
+                    XirFnTypeAnalysis callee_fn_type_analysis = xirAnalyzeFnType(callee_fn_type);
+                    if (callee_fn_type_analysis.inputs_count_table[XIR_IR_TYPE_FLOAT] > 0 || callee_fn_type_analysis.outputs_count_table[XIR_IR_TYPE_FLOAT] > 0) {
+                        XIR_FATAL_ERROR("floats aren't implemented\n");
+                    }
+
+                    for (size_t i = 0; i < callee_fn_type_analysis.outputs_count_table[XIR_IR_TYPE_INT]; i++) {
+                        stack_top += xirIrTypeSize(XIR_IR_TYPE_INT);
                         XIR_DYNARR_UNSAFE_PUSH(&regs, ((Reg){REG_KIND_STACK, {.stack = {stack_top}}}));
                     }
                     break;
                 }
+                case XIR_IR_OP_KIND_RETURN:
+                    break;
                 case XIR_IR_OP_KIND_DATA_PTR:
                     stack_top += xirIrTypeSize(XIR_IR_TYPE_INT);
                     XIR_DYNARR_UNSAFE_PUSH(&regs, ((Reg){REG_KIND_STACK, {.stack = {stack_top}}}));
                     break;
-                case XIR_IR_OP_KIND_RETURN:
                 case XIR_IR_OP_KIND_BRANCH:
                     break;
             }
@@ -143,7 +167,7 @@ void xirGenerateNasm(const XirIr *ir) {
         stack_top += stack_padding;
 
         printf("    sub rsp,%llu\n", stack_top - stack_pre_alloc_base);
-        size_t used_ir_regs = input_types->h.length;
+        size_t used_ir_regs = impl_fn_type_analysis.inputs_count_table[XIR_IR_TYPE_INT];
 
         for (size_t i = 0; i < impl.ops->h.length; i++) {
             XirIrOp op = impl.ops->d[i];
@@ -154,29 +178,47 @@ void xirGenerateNasm(const XirIr *ir) {
                     break;
                 case XIR_IR_OP_KIND_CALL_FN_IMPL:
                 case XIR_IR_OP_KIND_CALL_FN_IMPORT: {
-                    XirIrOpCall call = op.u.call;
-                    XirIrFnTypeIndex callee_type_index = xirIrOpCallFnTypeIndex(ir, &op);
-                    XirIrFnType callee_type = ir->fn_types->d[callee_type_index];
-
-                    size_t used_ints = 0;
-                    for (size_t i = 0; i < callee_type.input_types->h.length; i++) {
-                        XirIrType input_type = callee_type.input_types->d[i];
-                        switch (input_type) {
-                            case XIR_IR_TYPE_INT:
-                                if (used_ints >= XIR_STATIC_ARRAY_LENGTH(input_int_regs)) {
-                                    XIR_FATAL_ERROR("support for function calls with more than %zu integer inputs isn't implemented\n", XIR_STATIC_ARRAY_LENGTH(input_int_regs));
-                                }
-                                printf("    mov %s,", input_int_regs[used_ints]);
-                                emitReg(regs, call.inputs->d[i]);
-                                printf("\n");
-                                used_ints++;
-                                break;
-                            case XIR_IR_TYPE_FLOAT:
-                                XIR_FATAL_ERROR("support for function calls with floating point inputs isn't implemented\n");
-                                break;
-                        }
+                    if (impl_return_on_memory) {
+                        printf("    push rdi\n");
+                        stack_top += 8;
                     }
 
+                    XirIrOpCall call = op.u.call;
+                    XirIrFnTypeIndex callee_fn_type_index = xirIrOpCallFnTypeIndex(ir, &op);
+                    XirIrFnType callee_fn_type = ir->fn_types->d[callee_fn_type_index];
+                    XirFnTypeAnalysis callee_fn_type_analysis = xirAnalyzeFnType(callee_fn_type);
+                    bool callee_return_on_memory = callee_fn_type_analysis.outputs_count_table[XIR_IR_TYPE_INT] > XIR_STATIC_ARRAY_LENGTH(output_int_regs);
+
+                    unsigned long long stack_pre_alloc_base = stack_top;
+                    unsigned long long result_buf_base = 0;
+                    if (callee_return_on_memory) {
+                        stack_top += callee_fn_type_analysis.outputs_count_table[XIR_IR_TYPE_INT] * xirIrTypeSize(XIR_IR_TYPE_INT);
+                        result_buf_base = stack_top;
+                        printf("    lea %s,[rbp-%llu]\n", input_int_regs[0], result_buf_base);
+                    }
+
+                    if (callee_fn_type_analysis.inputs_count_table[XIR_IR_TYPE_INT] > XIR_STATIC_ARRAY_LENGTH(input_int_regs)) {
+                        stack_top += (callee_fn_type_analysis.inputs_count_table[XIR_IR_TYPE_INT] - XIR_STATIC_ARRAY_LENGTH(input_int_regs)) * xirIrTypeSize(XIR_IR_TYPE_INT);
+                    }
+
+                    unsigned long long stack_padding = (STACK_ALIGNMENT - (stack_top % STACK_ALIGNMENT)) % STACK_ALIGNMENT;
+                    stack_top += stack_padding;
+
+                    printf("    sub rsp,%llu\n", stack_top - stack_pre_alloc_base);
+
+                    for (size_t i = 0; i < callee_fn_type_analysis.inputs_count_table[XIR_IR_TYPE_INT]; i++) {
+                        size_t input_int_reg_i = callee_return_on_memory + i;
+                        if (input_int_reg_i < XIR_STATIC_ARRAY_LENGTH(input_int_regs)) {
+                            printf("    mov %s,", input_int_regs[input_int_reg_i]);
+                            emitReg(regs, call.inputs->d[i]);
+                            printf("\n");
+                        } else {
+                            printf("    mov rax,");
+                            emitReg(regs, call.inputs->d[i]);
+                            printf("\n");
+                            printf("    mov [rsp+%llu],rax\n", (input_int_reg_i - XIR_STATIC_ARRAY_LENGTH(input_int_regs)) * xirIrTypeSize(XIR_IR_TYPE_INT));
+                        }
+                    }
 
                     switch (op.kind) {
                         case XIR_IR_OP_KIND_CALL_FN_IMPL:
@@ -192,36 +234,43 @@ void xirGenerateNasm(const XirIr *ir) {
                             break;
                     }
 
-                    used_ints = 0;
-                    for (size_t i = 0; i < callee_type.output_types->h.length; i++) {
-                        XirIrType output_type = callee_type.output_types->d[i];
-                        switch (output_type) {
-                            case XIR_IR_TYPE_INT:
-                                if (used_ints >= XIR_STATIC_ARRAY_LENGTH(output_int_regs)) {
-                                    XIR_FATAL_ERROR("support for function calls with more than %zu integer outputs isn't implemented\n", XIR_STATIC_ARRAY_LENGTH(output_int_regs));
-                                }
-                                printf("    mov ");
-                                emitReg(regs, used_ir_regs++);
-                                printf(",%s\n", output_int_regs[used_ints]);
-                                used_ints++;
-                                break;
-                            case XIR_IR_TYPE_FLOAT:
-                                XIR_FATAL_ERROR("support for function calls with floating point outputs isn't implemented\n");
-                                break;
+                    for (size_t i = 0; i < callee_fn_type_analysis.outputs_count_table[XIR_IR_TYPE_INT]; i++) {
+                        if (callee_return_on_memory) {
+                            printf("    mov rax,[rbp-%llu]\n", result_buf_base - i * xirIrTypeSize(XIR_IR_TYPE_INT));
                         }
+                        printf("    mov ");
+                        emitReg(regs, used_ir_regs++);
+                        if (callee_return_on_memory) {
+                            printf(",rax\n");
+                        } else {
+                            printf(",%s\n", output_int_regs[i]);
+                        }
+                    }
+
+                    printf("    add rsp,%llu\n", stack_top - stack_pre_alloc_base);
+                    stack_top -= stack_pre_alloc_base;
+
+                    if (impl_return_on_memory) {
+                        printf("    pop rdi\n");
+                        stack_top -= 8;
                     }
                     break;
                 }
                 case XIR_IR_OP_KIND_RETURN: {
                     XirIrOpReturn _return = op.u._return;
-                    if (_return.outputs->h.length > XIR_STATIC_ARRAY_LENGTH(output_int_regs)) {
-                        XIR_FATAL_ERROR("support for function impls with more than %zu integer outputs isn't implemented\n", XIR_STATIC_ARRAY_LENGTH(output_int_regs));
-                    }
-
-                    for (size_t i = 0; i < _return.outputs->h.length; i++) {
-                        printf("    mov %s,", output_int_regs[i]);
-                        emitReg(regs, _return.outputs->d[i]);
-                        printf("\n");
+                    if (!impl_return_on_memory) {
+                        for (size_t i = 0; i < _return.outputs->h.length; i++) {
+                            printf("    mov %s,", output_int_regs[i]);
+                            emitReg(regs, _return.outputs->d[i]);
+                            printf("\n");
+                        }
+                    } else {
+                        for (size_t i = 0; i < _return.outputs->h.length; i++) {
+                            printf("    mov rax,");
+                            emitReg(regs, _return.outputs->d[i]);
+                            printf("\n");
+                            printf("    mov [%s+%llu],rax\n", input_int_regs[0], i * xirIrTypeSize(XIR_IR_TYPE_INT));
+                        }
                     }
 
                     printf("    mov rsp,rbp\n");
