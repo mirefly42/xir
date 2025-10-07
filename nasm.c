@@ -271,7 +271,7 @@ void xirGenerateNasm(const XirIr *ir) {
                     }
 
                     printf("    add rsp,%llu\n", stack_top - stack_pre_alloc_base);
-                    stack_top -= stack_pre_alloc_base;
+                    stack_top = stack_pre_alloc_base;
 
                     if (impl_return_on_memory) {
                         printf("    pop rdi\n");
