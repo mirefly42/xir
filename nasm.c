@@ -189,7 +189,9 @@ void xirGenerateNasm(const XirIr *ir) {
         unsigned long long stack_padding = (STACK_ALIGNMENT - (stack_top % STACK_ALIGNMENT)) % STACK_ALIGNMENT;
         stack_top += stack_padding;
 
-        printf("    sub rsp,%llu\n", stack_top - stack_pre_alloc_base);
+        if (stack_top != stack_pre_alloc_base) {
+            printf("    sub rsp,%llu\n", stack_top - stack_pre_alloc_base);
+        }
         size_t used_ir_regs = impl_fn_type_analysis.inputs_count_table[XIR_IR_TYPE_INT];
 
         for (size_t i = 0; i < impl.ops->h.length; i++) {
@@ -227,7 +229,9 @@ void xirGenerateNasm(const XirIr *ir) {
                     unsigned long long stack_padding = (STACK_ALIGNMENT - (stack_top % STACK_ALIGNMENT)) % STACK_ALIGNMENT;
                     stack_top += stack_padding;
 
-                    printf("    sub rsp,%llu\n", stack_top - stack_pre_alloc_base);
+                    if (stack_top != stack_pre_alloc_base) {
+                        printf("    sub rsp,%llu\n", stack_top - stack_pre_alloc_base);
+                    }
 
                     for (size_t i = 0; i < callee_fn_type_analysis.inputs_count_table[XIR_IR_TYPE_INT]; i++) {
                         size_t input_int_reg_i = callee_return_on_memory + i;
@@ -265,8 +269,10 @@ void xirGenerateNasm(const XirIr *ir) {
                         }
                     }
 
-                    printf("    add rsp,%llu\n", stack_top - stack_pre_alloc_base);
-                    stack_top = stack_pre_alloc_base;
+                    if (stack_top != stack_pre_alloc_base) {
+                        printf("    add rsp,%llu\n", stack_top - stack_pre_alloc_base);
+                        stack_top = stack_pre_alloc_base;
+                    }
 
                     if (impl_return_on_memory) {
                         printf("    pop rdi\n");
