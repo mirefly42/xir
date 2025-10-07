@@ -161,9 +161,9 @@ void xirGenerateNasm(const XirIr *ir) {
                         XIR_FATAL_ERROR("floats aren't implemented\n");
                     }
 
+                    stack_top += callee_fn_type_analysis.outputs_count_table[XIR_IR_TYPE_INT] * xirIrTypeSize(XIR_IR_TYPE_INT);
                     for (size_t i = 0; i < callee_fn_type_analysis.outputs_count_table[XIR_IR_TYPE_INT]; i++) {
-                        stack_top += xirIrTypeSize(XIR_IR_TYPE_INT);
-                        XIR_DYNARR_UNSAFE_PUSH(&regs, ((Reg){REG_KIND_STACK, {.stack = {stack_top}}}));
+                        XIR_DYNARR_UNSAFE_PUSH(&regs, ((Reg){REG_KIND_STACK, {.stack = {stack_top - i * xirIrTypeSize(XIR_IR_TYPE_INT)}}}));
                     }
                     break;
                 }
@@ -213,11 +213,11 @@ void xirGenerateNasm(const XirIr *ir) {
                     bool callee_return_on_memory = callee_fn_type_analysis.outputs_count_table[XIR_IR_TYPE_INT] > XIR_STATIC_ARRAY_LENGTH(output_int_regs);
 
                     unsigned long long stack_pre_alloc_base = stack_top;
-                    unsigned long long result_buf_base = 0;
                     if (callee_return_on_memory) {
-                        stack_top += callee_fn_type_analysis.outputs_count_table[XIR_IR_TYPE_INT] * xirIrTypeSize(XIR_IR_TYPE_INT);
-                        result_buf_base = stack_top;
-                        printf("    lea %s,[rbp-%llu]\n", input_int_regs[0], result_buf_base);
+                        Reg reg = regs->d[used_ir_regs];
+                        assert(reg.kind == REG_KIND_STACK);
+                        used_ir_regs += callee_fn_type_analysis.outputs_count_table[XIR_IR_TYPE_INT];
+                        printf("    lea %s,[rbp-%llu]\n", input_int_regs[0], reg.u.stack.offset);
                     }
 
                     if (callee_fn_type_analysis.inputs_count_table[XIR_IR_TYPE_INT] > XIR_STATIC_ARRAY_LENGTH(input_int_regs)) {
@@ -257,15 +257,10 @@ void xirGenerateNasm(const XirIr *ir) {
                             break;
                     }
 
-                    for (size_t i = 0; i < callee_fn_type_analysis.outputs_count_table[XIR_IR_TYPE_INT]; i++) {
-                        if (callee_return_on_memory) {
-                            printf("    mov rax,[rbp-%llu]\n", result_buf_base - i * xirIrTypeSize(XIR_IR_TYPE_INT));
-                        }
-                        printf("    mov ");
-                        emitReg(regs, used_ir_regs++);
-                        if (callee_return_on_memory) {
-                            printf(",rax\n");
-                        } else {
+                    if (!callee_return_on_memory) {
+                        for (size_t i = 0; i < callee_fn_type_analysis.outputs_count_table[XIR_IR_TYPE_INT]; i++) {
+                            printf("    mov ");
+                            emitReg(regs, used_ir_regs++);
                             printf(",%s\n", output_int_regs[i]);
                         }
                     }
