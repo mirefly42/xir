@@ -121,6 +121,22 @@ void xirValidateIr(const XirIr *ir) {
                     VALIDATE(branch.op <= fn_impl->ops->h.length); // <= because you can jump to the end of the function
                     break;
                 }
+                case XIR_IR_OP_KIND_SELECT: {
+                    XirIrOpSelect select = op->u.select;
+                    VALIDATE(select.cond < reg_types->h.length);
+                    VALIDATE(select.true_regs->h.length == select.false_regs->h.length);
+                    for (size_t i = 0; i < select.true_regs->h.length; i++) {
+                        XirIrRegIndex true_reg = select.true_regs->d[i];
+                        XirIrRegIndex false_reg = select.false_regs->d[i];
+                        VALIDATE(true_reg < reg_types->h.length);
+                        VALIDATE(false_reg < reg_types->h.length);
+                        VALIDATE(reg_types->d[true_reg] == reg_types->d[false_reg]);
+                    }
+
+                    for (size_t i = 0; i < select.true_regs->h.length; i++) {
+                        XIR_DYNARR_UNSAFE_PUSH(&reg_types, reg_types->d[select.true_regs->d[i]]);
+                    }
+                }
             }
         }
     }

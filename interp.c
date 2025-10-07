@@ -35,6 +35,12 @@ void xirInterpInit(XirInterp *interp, const XirIr *ir, XirInterpCallImportCallba
     interp->call_import_callback = call_import_callback;
 }
 
+static void duplicateRegs(XirInterp *interp, size_t regs_base, const XirIrRegIndexDynarr *indices) {
+    for (size_t i = 0; i < indices->h.length; i++) {
+        XIR_DYNARR_UNSAFE_PUSH(&interp->regs, xirInterpGetReg(interp, regs_base, indices->d[i]));
+    }
+}
+
 void xirInterpEvalImpl(XirInterp *interp, XirIrFnImplIndex impl_index, size_t regs_base) {
     const XirIrFnImpl *impl = interp->ir->fn_impls->d + impl_index;
 
@@ -67,6 +73,9 @@ void xirInterpEvalImpl(XirInterp *interp, XirIrFnImplIndex impl_index, size_t re
             }
             case XIR_IR_OP_KIND_RETURN:
             case XIR_IR_OP_KIND_BRANCH:
+                break;
+            case XIR_IR_OP_KIND_SELECT:
+                used_regs += op.u.select.true_regs->h.length;
                 break;
         }
     }
@@ -120,6 +129,15 @@ void xirInterpEvalImpl(XirInterp *interp, XirIrFnImplIndex impl_index, size_t re
                 if (xirInterpGetReg(interp, regs_base, branch.cond)) {
                     XIR_DYNARR_RESULT_CHECK(rawrDynarrResize(XIR_DYNARR_GP(&interp->regs), regs_base + ops_used_regs->d[branch.op]));
                     i = branch.op - 1; // HACK: subtract one to cancel out i++
+                }
+                break;
+            }
+            case XIR_IR_OP_KIND_SELECT: {
+                XirIrOpSelect select = op.u.select;
+                if (xirInterpGetReg(interp, regs_base, select.cond)) {
+                    duplicateRegs(interp, regs_base, select.true_regs);
+                } else {
+                    duplicateRegs(interp, regs_base, select.false_regs);
                 }
                 break;
             }

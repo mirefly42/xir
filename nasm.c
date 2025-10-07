@@ -78,6 +78,21 @@ static XirFnTypeAnalysis xirAnalyzeFnType(XirIrFnType fn_type) {
     return result;
 }
 
+static void duplicateReg(const RegDynarr *regs, size_t reg_index, size_t *used_ir_regs) {
+        printf("    mov rax,");
+        emitReg(regs, reg_index);
+        printf("\n");
+        printf("    mov ");
+        emitReg(regs, (*used_ir_regs)++);
+        printf(",rax\n");
+}
+
+static void duplicateRegs(const RegDynarr *regs, const XirIrRegIndexDynarr *indices, size_t *used_ir_regs) {
+    for (size_t i = 0; i < indices->h.length; i++) {
+        duplicateReg(regs, indices->d[i], used_ir_regs);
+    }
+}
+
 void xirGenerateNasm(const XirIr *ir) {
     printf("default rel\n");
 
@@ -160,6 +175,14 @@ void xirGenerateNasm(const XirIr *ir) {
                     break;
                 case XIR_IR_OP_KIND_BRANCH:
                     break;
+                case XIR_IR_OP_KIND_SELECT: {
+                    XirIrOpSelect select = op.u.select;
+                    for (size_t i = 0; i < select.true_regs->h.length; i++) {
+                        stack_top += xirIrTypeSize(XIR_IR_TYPE_INT);
+                        XIR_DYNARR_UNSAFE_PUSH(&regs, ((Reg){REG_KIND_STACK, {.stack = {stack_top}}}));
+                    }
+                    break;
+                }
             }
         }
 
@@ -299,6 +322,28 @@ void xirGenerateNasm(const XirIr *ir) {
                     printf(",0\n");
                     printf("    jnz .op_%zu\n", branch.op);
                     break;
+                }
+                case XIR_IR_OP_KIND_SELECT: {
+                    XirIrOpSelect select = op.u.select;
+                    size_t op_index = i;
+                    const Reg *cond_reg = regs->d + select.cond;
+                    if (cond_reg->kind == REG_KIND_IMM_INT) {
+                        duplicateRegs(regs, cond_reg->u.imm_int ? select.true_regs : select.false_regs, &used_ir_regs);
+                    } else {
+                        printf("    cmp qword ");
+                        emitReg(regs, select.cond);
+                        printf(",0\n");
+                        printf("    jz .select%zu_false\n", op_index);
+
+                        size_t prev_used_ir_regs = used_ir_regs;
+                        duplicateRegs(regs, select.true_regs, &used_ir_regs);
+                        used_ir_regs = prev_used_ir_regs;
+                        printf("    jmp .select%zu_end\n", op_index);
+
+                        printf("    .select%zu_false:\n", op_index);
+                        duplicateRegs(regs, select.false_regs, &used_ir_regs);
+                        printf("    .select%zu_end:\n", op_index);
+                    }
                 }
             }
         }

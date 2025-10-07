@@ -261,6 +261,26 @@ int main(int argc, char *argv[]) {
                     op.kind = XIR_IR_OP_KIND_BRANCH;
                     op.u.branch.cond = nextUllOrFail(source, &view);
                     op.u.branch.op = nextUllOrFail(source, &view);
+                } else if (lisStringViewEqual(op_name, XIR_SV("select"))) {
+                    op.kind = XIR_IR_OP_KIND_SELECT;
+                    XirIrOpSelect *select = &op.u.select;
+                    select->cond = nextUllOrFail(source, &view);
+
+                    {
+                        LisNodesView view = lisNodesViewFromList(nextListOrFail(source, &view));
+                        XIR_DYNARR_EASY_CREATE(&select->true_regs);
+                        while (!lisNodesViewIsEmpty(&view)) {
+                            XIR_DYNARR_UNSAFE_PUSH(&select->true_regs, nextUllOrFail(source, &view));
+                        }
+                    }
+
+                    {
+                        LisNodesView view = lisNodesViewFromList(nextListOrFail(source, &view));
+                        XIR_DYNARR_EASY_CREATE(&select->false_regs);
+                        while (!lisNodesViewIsEmpty(&view)) {
+                            XIR_DYNARR_UNSAFE_PUSH(&select->false_regs, nextUllOrFail(source, &view));
+                        }
+                    }
                 } else {
                     XIR_FATAL_ERROR("invalid operation %.*s\n", (int)op_name.length, op_name.data);
                 }

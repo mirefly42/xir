@@ -125,6 +125,29 @@ void xirDumpIr(const XirIr *ir) {
                 case XIR_IR_OP_KIND_BRANCH:
                     printf("branch %zu %zu", op->u.branch.cond, op->u.branch.op);
                     break;
+                case XIR_IR_OP_KIND_SELECT: {
+                    XirIrOpSelect select = op->u.select;
+                    xirDumpRegsRange(used_regs, select.true_regs->h.length);
+                    used_regs += select.true_regs->h.length;
+
+                    printf(" select %zu (", select.cond);
+                    for (size_t i = 0; i < select.true_regs->h.length; i++) {
+                        if (i > 0) {
+                            printf(" ");
+                        }
+                        printf("%zu", select.true_regs->d[i]);
+                    }
+
+                    printf(") (");
+
+                    for (size_t i = 0; i < select.false_regs->h.length; i++) {
+                        if (i > 0) {
+                            printf(" ");
+                        }
+                        printf("%zu", select.false_regs->d[i]);
+                    }
+                    printf(")");
+                }
             }
             printf(")");
         }
