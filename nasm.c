@@ -43,7 +43,7 @@ static unsigned long long xirIrTypeSize(XirIrType type) {
 }
 
 void emitReg(const RegDynarr *regs, XirIrRegIndex index) {
-    assert(index <= regs->h.length);
+    assert(index < regs->h.length);
     Reg reg = regs->d[index];
     switch (reg.kind) {
         case REG_KIND_IMM_INT:
