@@ -366,7 +366,8 @@ int main(int argc, char *argv[]) {
         );
 
         XirInterp interp = {0};
-        xirInterpInit(&interp, &ir, xirForeignFnImportsCallerCallImportCallback);
+        XirInterpReg interp_stack[4096];
+        xirInterpInit(&interp, &ir, xirForeignFnImportsCallerCallImportCallback, interp_stack, XIR_STATIC_ARRAY_LENGTH(interp_stack));
         interp.user_data = &foreign_fn_imports_caller;
 
         for (size_t i = 0; i < interp.ir->fn_exports->h.length; i++) {

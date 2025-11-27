@@ -1,7 +1,7 @@
 #include "interp.h"
 #include <assert.h>
 
-void xirInterpInit(XirInterp *interp, const XirIr *ir, XirInterpCallImportCallback call_import_callback) {
+void xirInterpInit(XirInterp *interp, const XirIr *ir, XirInterpCallImportCallback call_import_callback, XirInterpReg *stack, size_t stack_capacity) {
     *interp = (XirInterp){0};
     XIR_DYNARR_EASY_CREATE(&interp->regs);
     XIR_DYNARR_RESULT_CHECK(rawrDynarrCreate(
@@ -10,6 +10,9 @@ void xirInterpInit(XirInterp *interp, const XirIr *ir, XirInterpCallImportCallba
         ir->datas->h.length,
         rawr_dynarr_default_allocator
     ));
+
+    interp->stack = stack;
+    interp->stack_capacity = stack_capacity;
 
     interp->ir = ir;
 
@@ -42,6 +45,7 @@ static void duplicateRegs(XirInterp *interp, size_t regs_base, const XirIrRegInd
 }
 
 void xirInterpEvalImpl(XirInterp *interp, XirIrFnImplIndex impl_index, size_t regs_base) {
+    size_t stack_base = interp->stack_length;
     const XirIrFnImpl *impl = interp->ir->fn_impls->d + impl_index;
 
     // ops_used_regs->d[i] contains the amount of used registers before execution of operation i
@@ -76,6 +80,14 @@ void xirInterpEvalImpl(XirInterp *interp, XirIrFnImplIndex impl_index, size_t re
                 break;
             case XIR_IR_OP_KIND_SELECT:
                 used_regs += op.u.select.true_regs->h.length;
+                break;
+            case XIR_IR_OP_KIND_ALLOCA:
+                used_regs++;
+                break;
+            case XIR_IR_OP_KIND_STORE:
+                break;
+            case XIR_IR_OP_KIND_LOAD:
+                used_regs++;
                 break;
         }
     }
@@ -141,11 +153,31 @@ void xirInterpEvalImpl(XirInterp *interp, XirIrFnImplIndex impl_index, size_t re
                 }
                 break;
             }
+            case XIR_IR_OP_KIND_ALLOCA:
+                if (interp->stack_length >= interp->stack_capacity) {
+                    fprintf(stderr, "interpreter stack overflow\n");
+                    abort();
+                }
+                XirInterpReg ptr = (XirInterpReg)(interp->stack + interp->stack_length++);
+                XIR_DYNARR_UNSAFE_PUSH(&interp->regs, ptr);
+                break;
+            case XIR_IR_OP_KIND_STORE: {
+                XirIrOpStore store = op.u.store;
+                XirInterpReg *ptr = (XirInterpReg *)xirInterpGetReg(interp, regs_base, store.ptr_reg_index);
+                *ptr = xirInterpGetReg(interp, regs_base, store.value_reg_index);
+                break;
+            }
+            case XIR_IR_OP_KIND_LOAD: {
+                XirInterpReg value = *(XirInterpReg *)xirInterpGetReg(interp, regs_base, op.u.load.ptr_reg_index);
+                XIR_DYNARR_UNSAFE_PUSH(&interp->regs, value);
+                break;
+            }
         }
     }
 
     cleanup:
     rawrDynarrDestroy(XIR_DYNARR_GP(&ops_used_regs));
+    interp->stack_length = stack_base;
 }
 
 XirInterpReg xirInterpGetReg(const XirInterp *interp, size_t regs_base, XirIrRegIndex index) {

@@ -14,6 +14,9 @@ typedef RAWR_DYNARR_GEN(size_t, XirSizeTDynarr) XirSizeTDynarr;
 
 typedef struct XirInterp {
     XirInterpRegDynarr *regs;
+    XirInterpReg *stack;
+    size_t stack_length;
+    size_t stack_capacity;
     XirSizeTDynarr *data_ptrs;
     const XirIr *ir;
     unsigned char *data;
@@ -22,7 +25,7 @@ typedef struct XirInterp {
     void *user_data;
 } XirInterp;
 
-void xirInterpInit(XirInterp *interp, const XirIr *ir, XirInterpCallImportCallback call_import_callback);
+void xirInterpInit(XirInterp *interp, const XirIr *ir, XirInterpCallImportCallback call_import_callback, XirInterpReg *stack, size_t stack_capacity);
 void xirInterpEvalImpl(XirInterp *interp, XirIrFnImplIndex impl_index, size_t regs_base);
 XirInterpReg xirInterpGetReg(const XirInterp *interp, size_t regs_base, XirIrRegIndex index);
 void *xirInterpGetData(XirInterp *interp, size_t offset);
