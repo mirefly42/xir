@@ -147,7 +147,21 @@ void xirDumpIr(const XirIr *ir) {
                         printf("%zu", select.false_regs->d[i]);
                     }
                     printf(")");
+                    break;
                 }
+                case XIR_IR_OP_KIND_ALLOCA:
+                    xirDumpRegsRange(used_regs++, 1);
+                    printf(" alloca");
+                    break;
+                case XIR_IR_OP_KIND_STORE: {
+                    XirIrOpStore store = op->u.store;
+                    printf("store %zu %zu", store.ptr_reg_index, store.value_reg_index);
+                    break;
+                }
+                case XIR_IR_OP_KIND_LOAD:
+                    xirDumpRegsRange(used_regs++, 1);
+                    printf(" load %zu", op->u.load.ptr_reg_index);
+                    break;
             }
             printf(")");
         }

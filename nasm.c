@@ -18,6 +18,7 @@ static const char *output_int_regs[] = {
 
 typedef enum {
     REG_KIND_IMM_INT,
+    REG_KIND_IMM_PTR,
     REG_KIND_STACK,
 } RegKind;
 
@@ -29,6 +30,7 @@ typedef struct Reg {
     RegKind kind;
     union {
         unsigned long long imm_int;
+        unsigned long long imm_ptr;
         RegStack stack;
     } u;
 } Reg;
@@ -42,19 +44,32 @@ static unsigned long long xirIrTypeSize(XirIrType type) {
     }
 }
 
-void emitReg(const RegDynarr *regs, XirIrRegIndex index) {
+void emitStackReg(const RegDynarr *regs, XirIrRegIndex index) {
+    assert(index < regs->h.length);
+    Reg reg = regs->d[index];
+    assert(reg.kind == REG_KIND_STACK);
+
+    if (reg.u.stack.offset >> 63) {
+        printf("[rbp+%llu]", - reg.u.stack.offset);
+    } else {
+        printf("[rbp-%llu]", reg.u.stack.offset);
+    }
+}
+
+void loadReg(const RegDynarr *regs, XirIrRegIndex index, const char *into) {
     assert(index < regs->h.length);
     Reg reg = regs->d[index];
     switch (reg.kind) {
         case REG_KIND_IMM_INT:
-            printf("%llu", reg.u.imm_int);
+            printf("    mov %s,%llu\n", into, reg.u.imm_int);
+            break;
+        case REG_KIND_IMM_PTR:
+            printf("    lea %s,[rbp-%llu]\n", into, reg.u.imm_ptr);
             break;
         case REG_KIND_STACK:
-            if (reg.u.stack.offset >> 63) {
-                printf("[rbp+%llu]", - reg.u.stack.offset);
-            } else {
-                printf("[rbp-%llu]", reg.u.stack.offset);
-            }
+            printf("    mov %s,", into);
+            emitStackReg(regs, index);
+            printf("\n");
             break;
     }
 }
@@ -79,11 +94,9 @@ static XirFnTypeAnalysis xirAnalyzeFnType(XirIrFnType fn_type) {
 }
 
 static void duplicateReg(const RegDynarr *regs, size_t reg_index, size_t *used_ir_regs) {
-        printf("    mov rax,");
-        emitReg(regs, reg_index);
-        printf("\n");
+        loadReg(regs, reg_index, "rax");
         printf("    mov ");
-        emitReg(regs, (*used_ir_regs)++);
+        emitStackReg(regs, (*used_ir_regs)++);
         printf(",rax\n");
 }
 
@@ -91,6 +104,10 @@ static void duplicateRegs(const RegDynarr *regs, const XirIrRegIndexDynarr *indi
     for (size_t i = 0; i < indices->h.length; i++) {
         duplicateReg(regs, indices->d[i], used_ir_regs);
     }
+}
+
+static unsigned long long calculatePadding(unsigned long long stack_top, unsigned long long alignment) {
+    return (alignment - stack_top % alignment) % alignment;
 }
 
 void xirGenerateNasm(const XirIr *ir) {
@@ -183,11 +200,20 @@ void xirGenerateNasm(const XirIr *ir) {
                     }
                     break;
                 }
+                case XIR_IR_OP_KIND_ALLOCA:
+                    stack_top += xirIrTypeSize(XIR_IR_TYPE_INT);
+                    XIR_DYNARR_UNSAFE_PUSH(&regs, ((Reg){REG_KIND_IMM_PTR, {.imm_ptr = stack_top}}));
+                    break;
+                case XIR_IR_OP_KIND_STORE:
+                    break;
+                case XIR_IR_OP_KIND_LOAD:
+                    stack_top += xirIrTypeSize(XIR_IR_TYPE_INT);
+                    XIR_DYNARR_UNSAFE_PUSH(&regs, ((Reg){REG_KIND_STACK, {.stack = {stack_top}}}));
+                    break;
             }
         }
 
-        unsigned long long stack_padding = (STACK_ALIGNMENT - (stack_top % STACK_ALIGNMENT)) % STACK_ALIGNMENT;
-        stack_top += stack_padding;
+        stack_top += calculatePadding(stack_top, STACK_ALIGNMENT);
 
         if (stack_top != stack_pre_alloc_base) {
             printf("    sub rsp,%llu\n", stack_top - stack_pre_alloc_base);
@@ -226,8 +252,7 @@ void xirGenerateNasm(const XirIr *ir) {
                         stack_top += (callee_fn_type_analysis.inputs_count_table[XIR_IR_TYPE_INT] - XIR_STATIC_ARRAY_LENGTH(input_int_regs)) * xirIrTypeSize(XIR_IR_TYPE_INT);
                     }
 
-                    unsigned long long stack_padding = (STACK_ALIGNMENT - (stack_top % STACK_ALIGNMENT)) % STACK_ALIGNMENT;
-                    stack_top += stack_padding;
+                    stack_top += calculatePadding(stack_top, STACK_ALIGNMENT);
 
                     if (stack_top != stack_pre_alloc_base) {
                         printf("    sub rsp,%llu\n", stack_top - stack_pre_alloc_base);
@@ -236,13 +261,9 @@ void xirGenerateNasm(const XirIr *ir) {
                     for (size_t i = 0; i < callee_fn_type_analysis.inputs_count_table[XIR_IR_TYPE_INT]; i++) {
                         size_t input_int_reg_i = callee_return_on_memory + i;
                         if (input_int_reg_i < XIR_STATIC_ARRAY_LENGTH(input_int_regs)) {
-                            printf("    mov %s,", input_int_regs[input_int_reg_i]);
-                            emitReg(regs, call.inputs->d[i]);
-                            printf("\n");
+                            loadReg(regs, call.inputs->d[i], input_int_regs[input_int_reg_i]);
                         } else {
-                            printf("    mov rax,");
-                            emitReg(regs, call.inputs->d[i]);
-                            printf("\n");
+                            loadReg(regs, call.inputs->d[i], "rax");
                             printf("    mov [rsp+%llu],rax\n", (input_int_reg_i - XIR_STATIC_ARRAY_LENGTH(input_int_regs)) * xirIrTypeSize(XIR_IR_TYPE_INT));
                         }
                     }
@@ -264,7 +285,7 @@ void xirGenerateNasm(const XirIr *ir) {
                     if (!callee_return_on_memory) {
                         for (size_t i = 0; i < callee_fn_type_analysis.outputs_count_table[XIR_IR_TYPE_INT]; i++) {
                             printf("    mov ");
-                            emitReg(regs, used_ir_regs++);
+                            emitStackReg(regs, used_ir_regs++);
                             printf(",%s\n", output_int_regs[i]);
                         }
                     }
@@ -284,15 +305,11 @@ void xirGenerateNasm(const XirIr *ir) {
                     XirIrOpReturn _return = op.u._return;
                     if (!impl_return_on_memory) {
                         for (size_t i = 0; i < _return.outputs->h.length; i++) {
-                            printf("    mov %s,", output_int_regs[i]);
-                            emitReg(regs, _return.outputs->d[i]);
-                            printf("\n");
+                            loadReg(regs, _return.outputs->d[i], output_int_regs[i]);
                         }
                     } else {
                         for (size_t i = 0; i < _return.outputs->h.length; i++) {
-                            printf("    mov rax,");
-                            emitReg(regs, _return.outputs->d[i]);
-                            printf("\n");
+                            loadReg(regs, _return.outputs->d[i], "rax");
                             printf("    mov [%s+%llu],rax\n", input_int_regs[0], i * xirIrTypeSize(XIR_IR_TYPE_INT));
                         }
                     }
@@ -305,7 +322,7 @@ void xirGenerateNasm(const XirIr *ir) {
                 case XIR_IR_OP_KIND_DATA_PTR:
                     printf("    lea rax,[data_%zu]\n", op.u.data_ptr);
                     printf("    mov ");
-                    emitReg(regs, used_ir_regs++);
+                    emitStackReg(regs, used_ir_regs++);
                     printf(",rax\n");
                     break;
                 case XIR_IR_OP_KIND_BRANCH: {
@@ -318,9 +335,8 @@ void xirGenerateNasm(const XirIr *ir) {
                         break;
                     }
 
-                    printf("    cmp qword ");
-                    emitReg(regs, branch.cond);
-                    printf(",0\n");
+                    loadReg(regs, branch.cond, "rax");
+                    printf("    cmp qword rax,0\n");
                     printf("    jnz .op_%zu\n", branch.op);
                     break;
                 }
@@ -331,9 +347,8 @@ void xirGenerateNasm(const XirIr *ir) {
                     if (cond_reg->kind == REG_KIND_IMM_INT) {
                         duplicateRegs(regs, cond_reg->u.imm_int ? select.true_regs : select.false_regs, &used_ir_regs);
                     } else {
-                        printf("    cmp qword ");
-                        emitReg(regs, select.cond);
-                        printf(",0\n");
+                        loadReg(regs, select.cond, "rax");
+                        printf("    cmp qword rax,0\n");
                         printf("    jz .select%zu_false\n", op_index);
 
                         size_t prev_used_ir_regs = used_ir_regs;
@@ -345,7 +360,26 @@ void xirGenerateNasm(const XirIr *ir) {
                         duplicateRegs(regs, select.false_regs, &used_ir_regs);
                         printf("    .select%zu_end:\n", op_index);
                     }
+                    break;
                 }
+                case XIR_IR_OP_KIND_ALLOCA:
+                    used_ir_regs++;
+                    break;
+                case XIR_IR_OP_KIND_STORE: {
+                    XirIrOpStore store = op.u.store;
+                    loadReg(regs, store.ptr_reg_index, "rax");
+                    loadReg(regs, store.value_reg_index, "rdx");
+                    printf("    mov [rax],rdx\n");
+                    break;
+                }
+                case XIR_IR_OP_KIND_LOAD:
+                    loadReg(regs, op.u.load.ptr_reg_index, "rax");
+                    printf("    mov rax,[rax]\n");
+
+                    printf("    mov ");
+                    emitStackReg(regs, used_ir_regs++);
+                    printf(",rax\n");
+                    break;
             }
         }
         printf("    .op_%zu:\n", impl.ops->h.length);

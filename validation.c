@@ -137,6 +137,19 @@ void xirValidateIr(const XirIr *ir) {
                         XIR_DYNARR_UNSAFE_PUSH(&reg_types, reg_types->d[select.true_regs->d[i]]);
                     }
                 }
+                case XIR_IR_OP_KIND_ALLOCA:
+                    XIR_DYNARR_UNSAFE_PUSH(&reg_types, XIR_IR_TYPE_INT);
+                    break;
+                case XIR_IR_OP_KIND_STORE: {
+                    XirIrOpStore store = op->u.store;
+                    VALIDATE(store.ptr_reg_index < reg_types->h.length);
+                    VALIDATE(store.value_reg_index < reg_types->h.length);
+                    break;
+                }
+                case XIR_IR_OP_KIND_LOAD:
+                    VALIDATE(op->u.load.ptr_reg_index < reg_types->h.length);
+                    XIR_DYNARR_UNSAFE_PUSH(&reg_types, XIR_IR_TYPE_INT);
+                    break;
             }
         }
     }

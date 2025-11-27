@@ -27,6 +27,9 @@ typedef enum {
     XIR_IR_OP_KIND_DATA_PTR,
     XIR_IR_OP_KIND_BRANCH,
     XIR_IR_OP_KIND_SELECT,
+    XIR_IR_OP_KIND_ALLOCA,
+    XIR_IR_OP_KIND_STORE,
+    XIR_IR_OP_KIND_LOAD,
 } XirIrOpKind;
 
 typedef size_t XirIrRegIndex;
@@ -58,6 +61,15 @@ typedef struct XirIrOpSelect {
     XirIrRegIndexDynarr *false_regs;
 } XirIrOpSelect;
 
+typedef struct XirIrOpStore {
+    XirIrRegIndex ptr_reg_index;
+    XirIrRegIndex value_reg_index;
+} XirIrOpStore;
+
+typedef struct XirIrOpLoad {
+    XirIrRegIndex ptr_reg_index;
+} XirIrOpLoad;
+
 typedef struct XirIrOp {
     XirIrOpKind kind;
     union {
@@ -67,6 +79,8 @@ typedef struct XirIrOp {
         XirIrOpDataPtr data_ptr;
         XirIrOpBranch branch;
         XirIrOpSelect select;
+        XirIrOpStore store;
+        XirIrOpLoad load;
     } u;
 } XirIrOp;
 
